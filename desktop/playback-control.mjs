@@ -1,7 +1,7 @@
 import { BrowserWindow, screen, powerMonitor } from 'electron';
 import path from 'node:path';
 
-const playing = run => run && ['preparing', 'playing', 'paused', 'pausing', 'stopping'].includes(run.state);
+const playing = run => run && ['preparing', 'playing', 'paused', 'pausing', 'stopping', 'exporting'].includes(run.state);
 
 export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityChange }) {
   const window = new BrowserWindow({ title: 'Playbook 播放控制', width: 800, height: 104, show: false,

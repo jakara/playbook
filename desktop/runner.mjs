@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { narrationSource } from './narration.mjs';
+import { capturePptxScene, writePptx } from './pptx.mjs';
 
 const send = message => process.parentPort ? process.parentPort.postMessage(message) : process.send?.(message);
 const receive = callback => process.parentPort ? process.parentPort.on('message', event => callback(event.data)) : process.on('message', callback);
@@ -12,7 +13,16 @@ class Stopped extends Error {}
 let browser, page, running = false, stopped = false, paused = false, inOperation = false, closing = false, pauseVersion = 0;
 let position = { x: 900, y: 600 }, current = {}, config;
 let narrationAbort;
+let packaging = false, scenes = [];
 const visualChecks = [];
+
+async function slide(title, notes, durationMs, source, clean = false) {
+  if (!config.exportDir) return;
+  await checkpoint();
+  scenes.push(await capturePptxScene({ page, dir: config.exportDir, index: scenes.length + 1, title, notes, durationMs, source, clean }));
+  await checkpoint();
+}
+const transcript = (clip, fallback) => clip && typeof clip.text === 'string' ? clip.text : fallback;
 
 async function capture(name) {
   if (!config.captureDir) return;
@@ -60,7 +70,7 @@ async function foreground() {
   await page.bringToFront();
 }
 async function state() {
-  const phase = stopped ? 'stopping' : paused ? inOperation ? 'pausing' : 'paused' : 'playing';
+  const phase = stopped ? 'stopping' : packaging ? 'exporting' : paused ? inOperation ? 'pausing' : 'paused' : 'playing';
   change({ state: phase, ...current }); await ui('state', { phase, title: current.stepTitle || config.title, count: `${current.index || 0} / ${current.total || 0}`, progress: current.total ? current.completed / current.total * 100 : 0 });
 }
 async function checkpoint() {
@@ -95,6 +105,7 @@ async function moveTo(target, duration) {
 }
 async function run(input) {
   config = input; running = true; stopped = false; paused = Boolean(input.paused); pauseVersion = 0;
+  packaging = false; scenes = [];
   narrationAbort = new AbortController();
   let release, preparing = true, finalUpdate;
   try {
@@ -107,7 +118,7 @@ async function run(input) {
     inOperation = true;
     browser = await chromium.launch({ channel: 'chrome', headless: config.headless, args: ['--start-maximized', '--autoplay-policy=no-user-gesture-required'] });
     inOperation = false; await checkpoint();
-    const context = await browser.newContext({ viewport: config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
+    const context = await browser.newContext({ viewport: config.exportDir ? { width: 1440, height: 810 } : config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
     const total = flows.reduce((count, flow) => count + flow.steps.length, 0);
     let completed = 0;
     for (const [flowIndex, flow] of flows.entries()) {
@@ -133,6 +144,7 @@ async function run(input) {
       const openingVoice = startVoice(openingSource);
       await capture(`opening-${flow.id}`);
       current = { ...segment, total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs); await openingVoice(); await checkpoint();
+      await slide(flow.title, transcript(flow.narration?.opening, `${flow.title}。${flow.summary}`), settings.openingMs, openingSource);
       let chapter;
       for (const step of flow.steps) {
         await checkpoint(); current = { ...segment, total, completed, index: completed + 1, stepId: step.id, stepTitle: step.title }; await state();
@@ -140,6 +152,7 @@ async function run(input) {
         if (step.presentation?.chapter && step.presentation.chapter !== chapter) {
           chapter = step.presentation.chapter;
           await ui('center', { eyebrow: '接下来演示', title: chapter, description: step.title, phase: 'playing' });
+          await slide(chapter, `${chapter}。${step.title}`, Math.min(1800, settings.openingMs));
           await wait(Math.min(1800, settings.openingMs));
         }
         const target = step.target?.(prepared.context);
@@ -160,11 +173,14 @@ async function run(input) {
           spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
         }
-        await spoken(); await checkpoint(); await ui('detach');
+        await spoken(); await checkpoint();
+        await slide(step.title, transcript(step.narration, step.explain), (step.presentation?.holdMs ?? settings.defaultHoldMs) + (target ? settings.cursorMoveMs + 250 : 0), source);
+        await ui('detach');
         inOperation = true;
         try { await step.run(prepared.context); await step.verify(prepared.context); }
         finally { inOperation = false; }
         completed++; current.completed = completed; await state(); await checkpoint();
+        await slide(`${step.title} · 操作结果`, '', step.presentation?.afterMs ?? 550, null, true);
         await wait(step.presentation?.afterMs ?? 550);
       }
       if (release) { const cleanup = release; release = null; await cleanup(); }
@@ -172,7 +188,13 @@ async function run(input) {
     await inject();
     await ui('center', { eyebrow: '演示完成', title: '核心流程已演示完成', description: '每个步骤均已通过实际结果检查。\n你可以回到客户端查看运行记录，或从头再播放。', phase: 'done' });
     await capture('complete');
-    finalUpdate = { state: 'completed', completed: total, index: total, total };
+    let exported;
+    if (config.exportDir) {
+      await slide('演示完成', '核心流程已演示完成，每个步骤均已通过实际结果检查。', 1800);
+      packaging = true; current.stepTitle = '正在生成 PPTX…'; await state();
+      exported = await writePptx({ scenes, title: config.title, output: path.join(config.exportDir, 'deck.pptx'), checkpoint });
+    }
+    finalUpdate = { state: 'completed', completed: total, index: total, total, ...(exported ? { exported } : {}) };
   } catch (error) {
     await stopVoice();
     const cancelled = stopped || closing || error instanceof Stopped;
@@ -184,7 +206,7 @@ async function run(input) {
   } finally {
     narrationAbort.abort(); await stopVoice();
     if (release) { try { await release(); } catch { finalUpdate = { state: 'failed', error: '环境释放未完成，请核对本轮临时资源' }; } }
-    running = false; inOperation = false;
+    running = false; inOperation = false; packaging = false;
     if (stopped || closing) await browser?.close().catch(() => {});
     if (closing) process.exit(0);
     else if (finalUpdate) change(finalUpdate);
@@ -192,8 +214,8 @@ async function run(input) {
 }
 async function commandHandler({ command, config: input }) {
   if (command === 'start' && !running) { void run(input); return; }
-  if (command === 'pause' && running) { pauseVersion++; paused = true; await state(); }
-  if (command === 'resume' && running) {
+  if (command === 'pause' && running && !packaging) { pauseVersion++; paused = true; await state(); }
+  if (command === 'resume' && running && !packaging) {
     const requested = ++pauseVersion;
     try { await foreground(); }
     catch { change({ warning: '演示窗口未能置前，请检查受控浏览器窗口。' }); }

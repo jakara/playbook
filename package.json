@@ -1,6 +1,6 @@
 {
   "name": "@playbook/core",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Playbook desktop player and AI-native authoring skill",
@@ -21,7 +21,8 @@
     "desktop:build": "npm run build && node scripts/build-desktop.mjs",
     "desktop:check": "node --test tests/desktop-*.test.mjs tests/skill-installer.test.mjs",
     "desktop:smoke": "node scripts/desktop-smoke.mjs",
-    "package:mac": "npm run desktop:build && electron-builder --mac dir zip --arm64"
+    "package:mac": "npm run desktop:build && electron-builder --mac dir zip --arm64",
+    "test:pptx": "node scripts/pptx-smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "24.0.0",
@@ -32,12 +33,14 @@
   "main": "build/main.cjs",
   "dependencies": {
     "@playwright/test": "1.58.2",
-    "playwright": "1.58.2",
     "driver.js": "1.10.2",
     "esbuild": "0.28.2",
-    "typescript": "5.9.3",
+    "jszip": "3.10.1",
+    "playwright": "1.58.2",
+    "pptxgenjs": "4.0.1",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3"
   },
   "build": {
     "electronDist": "node_modules/electron/dist",

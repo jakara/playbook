@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { readWorkspace, inside, selection, snapshot } from './library.mjs';
 import { FRAMEWORKS, SKILL_NAMES, targetFor, inspectSkillBundle, installSkillBundle } from './skill-installer.mjs';
 import { createPlaybackControl } from './playback-control.mjs';
+import { commitPptx } from './pptx.mjs';
 
 app.setName('Playbook');
 if (process.env.PLAYBOOK_USER_DATA) app.setPath('userData', path.resolve(process.env.PLAYBOOK_USER_DATA));
@@ -13,7 +14,7 @@ const appRoot = app.getAppPath();
 const starter = path.join(appRoot, 'examples/starter');
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-wright');
-const skillVersion = '0.6.0';
+const skillVersion = '0.7.0';
 const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;
@@ -82,7 +83,7 @@ async function disposeWorker() {
   await Promise.race([new Promise(resolve => old.once('exit', resolve)), new Promise(resolve => setTimeout(resolve, 8000))]);
   try { old.kill(); } catch {}
 }
-async function play({ workspaceId, entryId, kind = 'script', profileId }) {
+async function play({ workspaceId, entryId, kind = 'script', profileId }, pptxDestination = null) {
   if (launchBusy || (activeRun && !terminal(activeRun.state))) throw new Error('请先停止当前演示');
   launchBusy = true;
   try {
@@ -92,7 +93,7 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
     if (!['script', 'book', 'section', 'demo'].includes(kind)) throw new Error('播放类型无效');
     const selected = selection(workspace, entryId, kind, profileId);
     if (selected.items.some(item => item.requirements.replay === 'single-run' && runs.some(run => run.workspaceId === workspaceId && run.profileId === selected.profile.id && run.executing && run.flowIds?.includes(item.id)))) throw new Error('此流程未声明可重播的恢复方案。请先让智能体核对数据状态并完善恢复策略。');
-    activeRun = { id: randomUUID(), title: selected.title, workspaceId, entryId, kind, profileId: selected.profile.id,
+    activeRun = { id: randomUUID(), title: selected.title, workspaceId, entryId, kind, profileId: selected.profile.id, mode: pptxDestination ? 'pptx' : 'play',
       profileName: selected.profile.title, state: 'preparing', total: selected.items.reduce((sum, item) => sum + item.steps.length, 0),
       index: 0, completed: 0, startedAt: new Date().toISOString(), sourceToken: workspace.token, sourceChanged: false, flowIds: selected.items.map(item => item.id),
       steps: selected.items.flatMap(item => item.steps.map(step => ({ ...step, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle }))) };
@@ -113,6 +114,17 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
         if (activeRun?.id !== runId) return;
         if (message.type === 'state' && !terminal(activeRun.state)) {
           const update = { ...message.update };
+          if (pptxDestination && update.state === 'completed') {
+            try {
+              if (!update.exported) throw new Error('运行器未生成 PPTX');
+              let saved;
+              const committed = await commitPptx(path.join(outputDir, 'export/deck.pptx'), pptxDestination, () => intent.stopped || quitting,
+                () => { saved = record({ ...update, exported: { ...update.exported, path: pptxDestination } }); });
+              if (committed) await saved;
+              else if (!terminal(activeRun.state)) await record({ state: 'stopped' });
+            } catch { await record({ state: intent.stopped ? 'stopped' : 'failed', error: intent.stopped ? undefined : 'PPTX 保存失败，请检查目标文件夹权限和磁盘空间。本轮操作已经执行。' }); }
+            return;
+          }
           if (intent.stopped && !terminal(update.state)) update.state = 'stopping';
           await record(update);
         }
@@ -132,6 +144,7 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
         segments: selected.items.map(item => ({ flowId: item.id, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle })),
         profileId: selected.profile.id, dataMode: selected.profile.dataMode, parameters: selected.profile.parameters, workspaceDir: workspace.path,
         captureDir: process.env.PLAYBOOK_TEST_CAPTURE === '1' ? path.join(dataDir, 'evidence', runId) : null,
+        exportDir: pptxDestination ? path.join(outputDir, 'export') : null,
         pace: process.env.PLAYBOOK_TEST_PACE ? Math.max(.02, Number(process.env.PLAYBOOK_TEST_PACE)) : 1,
         headless: process.env.PLAYBOOK_TEST_HEADLESS === '1', paused: intent.paused } });
       intent.ready = true;
@@ -160,6 +173,7 @@ function handle(name, action, allowControl = false) {
 }
 
 async function control(command) {
+  if (activeRun?.state === 'exporting' && ['pause', 'resume', 'toggle'].includes(command)) return;
   if (command === 'toggle') {
     if (activeRun && !terminal(activeRun.state)) {
       if (activeRun.state === 'stopping') return;
@@ -229,6 +243,24 @@ app.whenReady().then(async () => {
   });
   handle('removeWorkspace', async id => { const workspace = workspaces.find(item => item.id === id); if (workspace?.path === starter) throw new Error('内置样例用于验证播放器，不能移除'); settings.roots = settings.roots.filter(root => root !== workspace?.path); await saveSettings(); await refresh(); return viewState(); });
   handle('play', play);
+  handle('exportPptx', async input => {
+    if (launchBusy || (activeRun && !terminal(activeRun.state))) throw new Error('请先停止当前演示');
+    const workspace = workspaces.find(item => item.id === input?.workspaceId);
+    if (!workspace) throw new Error('项目尚未登记');
+    const selected = selection(workspace, input.entryId, input.kind, input.profileId);
+    const name = selected.title.replace(/[\\/:*?"<>|\x00-\x1f]/g, '-').slice(0, 120) || 'Playbook';
+    const destination = await dialog.showSaveDialog(window, { title: '回放并导出 PPTX', defaultPath: path.join(app.getPath('documents'), `${name}.pptx`), filters: [{ name: 'PowerPoint 演示文稿', extensions: ['pptx'] }], properties: ['createDirectory', 'showOverwriteConfirmation'] });
+    if (destination.canceled || !destination.filePath) return { canceled: true };
+    if (!/\.pptx$/i.test(destination.filePath)) throw new Error('文件名需以 .pptx 结尾，请重新选择保存位置');
+    return play(input, destination.filePath);
+  });
+  handle('openExport', async ({ runId, reveal = false }) => {
+    const run = runs.find(item => item.id === runId);
+    if (run?.state !== 'completed' || !run.exported?.path) throw new Error('此记录没有已完成的 PPTX 文件');
+    if (!(await stat(run.exported.path)).isFile()) throw new Error('PPTX 文件已移动或删除');
+    if (reveal) shell.showItemInFolder(run.exported.path);
+    else { const error = await shell.openPath(run.exported.path); if (error) throw new Error('PPTX 无法打开，请在文件夹中查看'); }
+  });
   handle('setPlaybackSelection', input => {
     if (input === null) { playbackSelection = null; return; }
     const workspace = workspaces.find(item => item.id === input?.workspaceId);

@@ -35,6 +35,14 @@ test('rapid global toggles alternate requested intent before worker acknowledgem
   assert.equal(context.controlIntent.paused, false);
 });
 
+test('PPTX packaging ignores pause/toggle but still accepts stop', async () => {
+  const context = mainContext({ activeRun: { id: 'run', state: 'exporting' } });
+  for (const command of ['pause', 'resume', 'toggle']) await vm.runInContext(`control('${command}')`, context);
+  assert.equal(context.activeRun.state, 'exporting'); assert.equal(context.messages.length, 0);
+  await vm.runInContext("control('stop')", context);
+  assert.equal(context.activeRun.state, 'stopping'); assert.equal(context.messages[0].command, 'stop');
+});
+
 async function preparingRun() {
   let release;
   const snapshotReady = new Promise(resolve => { release = resolve; });
@@ -105,7 +113,7 @@ test('resume restores the controlled minimized Chrome window before bringing its
 test('a newer pause wins while resume is awaiting browser activation', async () => {
   let focused;
   const focusPending = new Promise(resolve => { focused = resolve; });
-  const context = vm.createContext({ paused: true, pauseVersion: 0, running: true, stopped: false, closing: false,
+  const context = vm.createContext({ paused: true, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
     foreground: () => focusPending, state: async () => {}, change: () => {}, process: {},
   });
   vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);

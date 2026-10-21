@@ -5,7 +5,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 # playbook-wright · Playbook 创作与维护
 
-帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、Book/Section 编排和 TC 转换；桌面应用负责项目浏览、搜索、播放、暂停继续、停止重播与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
+帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、Book/Section 编排和 TC 转换；桌面应用负责项目浏览、搜索、播放、暂停继续、停止重播、PPTX 导出与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
 
 主调用名为 `$playbook-wright`；旧 `$playbook-playwright` 通过同级兼容 Skill 读取本文件，执行同一套指引。产品名仍为 Playbook，不改 SDK 名、清单或业务资产。
 
@@ -20,6 +20,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 - 页面区域遮盖/模糊、本机语音与本地录音、同步播放控制。
 - 客户端原生悬浮条的显隐、拖动、收起/展开、全局快捷键与恢复 Chrome。
 - 只读浏览与搜索、执行快照、运行反馈、TC 双向转换和 Skill 安装更新。
+- Book/Section/脚本回放导出 PPTX：页面截图、内嵌语音、按讲解换页与演讲者备注，见 [PPTX 导出](references/pptx-export.md)。
 
 创作或修改资产时读取 [契约](references/contract.md)；其余按实际工作只读取对应指引：
 
@@ -29,7 +30,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 已有项目契约与本 Skill 不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
 
-当前安装页 Skill 版本为 **0.6.0**，适配客户端 v0.3；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用，新呈现字段需要 v0.3 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
+当前安装页 Skill 版本为 **0.7.0**，适配客户端 v0.4；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用，新呈现字段需要 v0.3 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
 
 安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-wright` 或所选项目目录下的 `.agents/skills/playbook-wright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-wright` 或 `.claude/skills/playbook-wright`。项目安装由用户在系统文件夹选择器中指定智能体打开的项目目录，不要求先登记到 Playbook 或存在 `.playbook.json`；目标追加框架固定的 Skill 子目录，不自动猜测或改为上级仓库。已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。安装器同时写入主 Skill 与同级 `playbook-playwright` 兼容入口，逐一预览并保护两者的本地修改；更新旧安装先备份。若第二个入口失败，已完成的主入口保留，显示未完成并可重试；不宣称跨两个目录原子替换。安装成功只代表两个入口的文件核验通过，需在目标智能体重新加载或开启新会话，确认调用当前版本。
 
