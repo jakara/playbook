@@ -26,7 +26,7 @@
 #ygd-cursor { position: absolute; left: 0; top: 0; width: 32px; height: 40px; pointer-events: none !important; will-change: transform; }
 #ygd-cursor * { pointer-events: none !important; }
 #ygd-cursor > svg { position: relative; width: 27px; height: 34px; filter: drop-shadow(0 2px 3px #10203855); }
-.ygd-halo { position: absolute; left: -31px; top: -31px; width: 68px; height: 68px; border-radius: 50%; border: 2px solid #5f9cffc9; background: #73abff1a; box-shadow: 0 0 0 8px #86b2ff15, 0 0 32px #88b7ff55; }
+.ygd-halo { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle, #73abff08 25%, #73abff15 53%, #7aaeff70 66%, #8eb7ff30 74%, transparent 83%); }
 .ygd-ripple { position: absolute; left: -12px; top: -12px; width: 30px; height: 30px; border: 3px solid #2766b9; border-radius: 50%; opacity: 0; }
 .ygd-click .ygd-ripple { animation: ygd-click .65s ease-out; }
 .driver-popover.ygd-popover { min-width: 300px; max-width: 360px; padding: 22px 25px; border-radius: 12px; border: 1px solid #dce6f0; box-shadow: 0 16px 50px #13233d35; font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }

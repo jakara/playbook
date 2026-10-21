@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
 import { build } from 'esbuild';
+import { validatePlaybookPresentation } from '../dist/index.js';
 
 export const hash = value => createHash('sha256').update(value).digest('hex');
 export async function inside(root, relative) {
@@ -14,19 +15,26 @@ export async function inside(root, relative) {
   return target;
 }
 
-function literal(node) {
+function literal(node, strict = false) {
   if (!node) return undefined;
-  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return literal(node.expression);
+  if (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) return literal(node.expression, strict);
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   if (ts.isNumericLiteral(node)) return Number(node.text);
   if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
   if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
-  if (ts.isArrayLiteralExpression(node)) return node.elements.map(literal);
+  if (node.kind === ts.SyntaxKind.NullKeyword) return null;
+  if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(node.operand)) return -Number(node.operand.text);
+  if (ts.isArrayLiteralExpression(node)) return node.elements.map(element => literal(element, strict));
   if (ts.isObjectLiteralExpression(node)) return Object.fromEntries(node.properties.flatMap(property => {
-    if (!ts.isPropertyAssignment(property)) return [];
+    if (!ts.isPropertyAssignment(property)) {
+      if (strict || ts.isSpreadAssignment(property)) throw new Error('呈现字段与流程对象需要静态字面量，不能展开或动态计算');
+      return [];
+    }
+    if (strict && ts.isComputedPropertyName(property.name)) throw new Error('呈现字段不能动态计算属性名');
     const name = property.name.getText().replace(/^['"]|['"]$/g, '');
-    return [[name, literal(property.initializer)]];
+    return [[name, literal(property.initializer, strict || ['narration', 'redactions', 'spotlightFeather'].includes(name))]];
   }));
+  if (strict) throw new Error('新呈现字段需要静态字面量');
   return undefined;
 }
 
@@ -47,8 +55,26 @@ export function metadata(source, filename) {
   const req = value.requirements;
   if (!req || !['real', 'fixture', 'mock'].includes(req.dataMode) || !['read-only', 'writes'].includes(req.effects)
     || !['safe', 'reset-required', 'single-run'].includes(req.replay) || !Array.isArray(req.roles)) throw new Error('环境、数据副作用或重播声明不完整');
+  validatePlaybookPresentation(value);
   return { id: value.id, title: value.title, summary: value.summary || '', source: value.source,
-    requirements: req, steps: value.steps.map(({ id, title, explain, presentation }) => ({ id, title, explain, presentation })) };
+    presentation: value.presentation, narration: value.narration, redactions: value.redactions,
+    requirements: req, steps: value.steps.map(({ id, title, explain, presentation, narration }) => ({ id, title, explain, presentation, narration })) };
+}
+
+function audioReferences(flow) {
+  return [...new Set([flow.narration?.opening, ...flow.steps.map(step => step.narration)]
+    .flatMap(clip => clip && typeof clip === 'object' && typeof clip.audio === 'string' ? [clip.audio] : []))];
+}
+
+async function readAudio(root, relative) {
+  // Re-check at snapshot time too: browsing does not grant later access to a changed path.
+  if (typeof relative !== 'string' || !/\.(?:wav|mp3|m4a|ogg)$/i.test(relative)) throw new Error('语音文件只支持 WAV、MP3、M4A、OGG');
+  const filename = await inside(root, relative);
+  const limit = 20 * 1024 * 1024;
+  if ((await stat(filename)).size > limit) throw new Error(`语音文件不能超过 20 MB：${relative}`);
+  const content = await readFile(filename);
+  if (content.length > limit) throw new Error(`语音文件不能超过 20 MB：${relative}`);
+  return { filename, content, hash: hash(content) };
 }
 
 export async function readWorkspace(directory) {
@@ -77,6 +103,10 @@ export async function readWorkspace(directory) {
         scriptIds.add(meta.id);
         if (!profileIds.has(entry.profile)) throw new Error('流程引用的环境不存在');
         if (output.profiles.find(p => p.id === entry.profile).dataMode !== meta.requirements.dataMode) throw new Error('脚本与环境的数据类别不一致');
+        for (const relative of audioReferences(meta)) {
+          const asset = await readAudio(root, relative);
+          parts.push(`audio:${relative}:${asset.hash}`);
+        }
         output.items.push({ ...meta, file: entry.file, tags: Array.isArray(entry.tags) ? entry.tags : [], hash: hash(source), valid: true, defaultProfileId: entry.profile });
         parts.push(source);
       } catch (error) {
@@ -167,18 +197,45 @@ export async function snapshot({ workspace, items, profile, outputDir, appRoot }
   const req = createRequire(path.join(appRoot, 'package.json'));
   // Absolute ESM entry points retain named exports in external workspace bundles.
   const externalPackages = new Map(['@playwright/test', 'playwright'].map(name => [name, req.resolve(name).replace(/\.js$/, '.mjs')]));
+  const entrySources = new Map();
   const result = await build({
     stdin: { contents: `${entries.map((file, i) => `import flow${i} from ${JSON.stringify(file)};`).join('\n')}\nimport profile from ${JSON.stringify(profilePath)};\nexport const flows=[${entries.map((_, i) => `flow${i}`).join(',')}]; export { profile };`, resolveDir: workspace.path, loader: 'ts' },
     bundle: true, platform: 'node', format: 'esm', target: 'node22', write: false, metafile: true,
     absWorkingDir: workspace.path, nodePaths: [path.join(appRoot, 'node_modules')],
     plugins: [{ name: 'playbook-runtime', setup(builder) {
+      builder.onLoad({ filter: /.*/ }, async ({ path: filename }) => {
+        if (!entries.includes(filename)) return;
+        const contents = await readFile(filename, 'utf8');
+        entrySources.set(filename, contents);
+        return { contents, loader: /\.[jt]sx$/.test(filename) ? 'tsx' : 'ts' };
+      });
       builder.onResolve({ filter: /^@playbook\/core$/ }, () => ({ path: path.join(appRoot, 'dist/index.js') }));
       builder.onResolve({ filter: /^(@playwright\/test|playwright)$/ }, ({ path: name }) => ({ path: externalPackages.get(name), external: true }));
     } }],
   });
   const code = result.outputFiles[0].text;
-  const snapshotHash = hash(code + JSON.stringify(profile.parameters));
+  const assets = [];
+  // Resolve references from the exact code bytes esbuild consumed, rather than stale browse metadata.
+  for (const filename of entries) {
+    const source = entrySources.get(filename);
+    if (source === undefined) throw new Error('流程未包含在播放快照中');
+    const meta = metadata(source, filename);
+    for (const relative of audioReferences(meta)) {
+      if (assets.some(asset => asset.relative === relative)) continue;
+      const asset = await readAudio(workspace.path, relative);
+      assets.push({ relative, ...asset });
+    }
+  }
+  assets.sort((a, b) => a.relative.localeCompare(b.relative));
+  const snapshotHash = hash(code + JSON.stringify(profile.parameters) + JSON.stringify(assets.map(asset => [asset.relative, asset.hash])));
+  const audioDir = path.join(outputDir, 'audio');
+  if (assets.length) await mkdir(audioDir, { recursive: true });
+  const audioAssets = Object.fromEntries(await Promise.all(assets.map(async asset => {
+    const filename = path.join(audioDir, `${asset.hash}${path.extname(asset.relative).toLowerCase()}`);
+    await writeFile(filename, asset.content, { mode: 0o600 });
+    return [asset.relative, filename];
+  })));
   const bundle = path.join(outputDir, 'flow.mjs'); await writeFile(bundle, code, { mode: 0o600 });
   const files = Object.keys(result.metafile.inputs).filter(name => name !== '<stdin>');
-  return { bundle, snapshotHash, inputs: files, sourceToken: workspace.token };
+  return { bundle, snapshotHash, inputs: files, sourceToken: workspace.token, audioAssets };
 }

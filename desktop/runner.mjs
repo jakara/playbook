@@ -3,6 +3,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { narrationSource } from './narration.mjs';
 
 const send = message => process.parentPort ? process.parentPort.postMessage(message) : process.send?.(message);
 const receive = callback => process.parentPort ? process.parentPort.on('message', event => callback(event.data)) : process.on('message', callback);
@@ -10,19 +11,39 @@ const change = update => send({ type: 'state', update });
 class Stopped extends Error {}
 let browser, page, running = false, stopped = false, paused = false, inOperation = false, closing = false, pauseVersion = 0;
 let position = { x: 900, y: 600 }, current = {}, config;
+let narrationAbort;
 const visualChecks = [];
 
 async function capture(name) {
   if (!config.captureDir) return;
   await mkdir(config.captureDir, { recursive: true });
   await page.screenshot({ path: path.join(config.captureDir, `${name}.png`) });
-  const details = await page.evaluate(() => ({ ...window.playbookGuide?.inspect(), arrow: Boolean(document.querySelector('.driver-popover-arrow')), toolbarPresent: Boolean(document.querySelector('#ygd-toolbar')), rootParent: document.querySelector('#ygd-root')?.parentElement.tagName }));
+  const details = await page.evaluate(() => ({ ...window.playbookGuide?.inspect(), privacy: window.playbookPrivacy?.inspect(), narration: window.playbookNarration?.inspect(), arrow: Boolean(document.querySelector('.driver-popover-arrow')), toolbarPresent: Boolean(document.querySelector('#ygd-toolbar')), rootParent: document.querySelector('#ygd-root')?.parentElement.tagName }));
   visualChecks.push({ name, ...details });
   await writeFile(path.join(config.captureDir, 'visual-checks.json'), JSON.stringify(visualChecks, null, 2));
 }
 
 async function ui(method, value) {
-  if (page && !page.isClosed()) await page.evaluate(({ method, value }) => window.playbookGuide?.[method](value), { method, value });
+  if (page && !page.isClosed()) await page.evaluate(({ method, value }) => {
+    if (method === 'state') window.playbookNarration?.state(value);
+    return window.playbookGuide?.[method](value);
+  }, { method, value });
+}
+async function voiceSource(flow, clip, fallback) {
+  if (clip === false || (!flow.narration?.enabled && !clip)) return null;
+  await checkpoint();
+  const source = await narrationSource({ clip, fallback, options: flow.narration, audioAssets: config.audioAssets,
+    cacheDir: path.join(path.dirname(config.bundle), 'narration'), signal: narrationAbort.signal });
+  await checkpoint();
+  return source;
+}
+function startVoice(source) {
+  if (!source) return async () => {};
+  const task = page.evaluate(value => window.playbookNarration.play(value), source).then(() => null, error => error);
+  return async () => { const error = await task; if (error) throw error; };
+}
+async function stopVoice() {
+  if (page && !page.isClosed()) await page.evaluate(() => window.playbookNarration?.stop()).catch(() => {});
 }
 async function foreground() {
   if (!page || page.isClosed()) return;
@@ -58,6 +79,7 @@ async function inject() {
   await page.addStyleTag({ content: await readFile(from('desktop/presentation/guide.css'), 'utf8') });
   await page.addScriptTag({ content: await readFile(from('node_modules/driver.js/dist/driver.js.iife.js'), 'utf8') });
   await page.addScriptTag({ content: await readFile(from('desktop/presentation/guide.js'), 'utf8') });
+  await page.addScriptTag({ content: await readFile(from('desktop/presentation/narration.js'), 'utf8') });
   await ui('place', position);
 }
 async function moveTo(target, duration) {
@@ -73,6 +95,7 @@ async function moveTo(target, duration) {
 }
 async function run(input) {
   config = input; running = true; stopped = false; paused = Boolean(input.paused); pauseVersion = 0;
+  narrationAbort = new AbortController();
   let release, preparing = true, finalUpdate;
   try {
     const { flows, profile } = await import(pathToFileURL(config.bundle).href);
@@ -82,7 +105,7 @@ async function run(input) {
       if (flow.requirements.replay === 'reset-required' && profile.resetBeforeRun !== true) throw new Error('此流程需要已验证的环境重置，Profile 尚未声明 resetBeforeRun');
     }
     inOperation = true;
-    browser = await chromium.launch({ channel: 'chrome', headless: config.headless, args: ['--start-maximized'] });
+    browser = await chromium.launch({ channel: 'chrome', headless: config.headless, args: ['--start-maximized', '--autoplay-policy=no-user-gesture-required'] });
     inOperation = false; await checkpoint();
     const context = await browser.newContext({ viewport: config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
     const total = flows.reduce((count, flow) => count + flow.steps.length, 0);
@@ -93,16 +116,23 @@ async function run(input) {
       await checkpoint();
       if (page && !page.isClosed()) await page.close();
       page = await context.newPage(); page.setDefaultTimeout(15000);
+      if (flow.redactions?.length) {
+        const privacy = `window.__playbookRedactions = ${JSON.stringify(flow.redactions)};\n${await readFile(path.join(config.appRoot, 'desktop/presentation/privacy.js'), 'utf8')}`;
+        await page.addInitScript({ content: privacy });
+        await page.evaluate(privacy);
+      }
       inOperation = true; change({ executing: true });
       const prepared = await profile.prepare({ page, workspaceDir: config.workspaceDir, parameters: config.parameters });
       if (!prepared?.context || prepared.context.page !== page) throw new Error('Profile 必须返回当前演示 page');
       release = prepared.release; preparing = false; inOperation = false;
       await checkpoint(); await inject();
-      const settings = { spotlightRadius: 105, overlayOpacity: .56, cursorMoveMs: 900, defaultHoldMs: 2600, openingMs: 2800, ...flow.presentation };
+      const settings = { spotlightRadius: 105, spotlightFeather: 24, overlayOpacity: .56, cursorMoveMs: 900, defaultHoldMs: 2600, openingMs: 2800, ...flow.presentation };
+      const openingSource = await voiceSource(flow, flow.narration?.opening, `${flow.title}。${flow.summary}`);
       await ui('configure', settings);
       await ui('center', { eyebrow: `${segment.sectionTitle ? segment.sectionTitle + ' · ' : ''}${config.dataMode === 'real' ? '实际服务' : config.dataMode === 'mock' ? '模拟接口' : '受控样例'} · Playbook`, title: flow.title, description: flow.summary, phase: 'playing' });
+      const openingVoice = startVoice(openingSource);
       await capture(`opening-${flow.id}`);
-      current = { ...segment, total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs);
+      current = { ...segment, total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs); await openingVoice(); await checkpoint();
       let chapter;
       for (const step of flow.steps) {
         await checkpoint(); current = { ...segment, total, completed, index: completed + 1, stepId: step.id, stepTitle: step.title }; await state();
@@ -113,20 +143,24 @@ async function run(input) {
           await wait(Math.min(1800, settings.openingMs));
         }
         const target = step.target?.(prepared.context);
+        const source = await voiceSource(flow, step.narration, step.explain);
+        let spoken;
         if (target) {
           if (await target.count() !== 1) throw new Error('目标控件不唯一');
           await target.waitFor({ state: 'visible' });
           await target.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
           await target.evaluate((element, details) => window.playbookGuide.highlight(element, details), { title: step.title, description: step.explain, side: step.presentation?.side, index: completed + 1, total });
+          spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
           await moveTo(target, settings.cursorMoveMs);
           await capture(`step-${completed + 1}`);
           await ui('clickEffect'); await wait(250);
         } else {
           await ui('center', { eyebrow: '流程说明', title: step.title, description: step.explain, phase: 'playing' });
+          spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
         }
-        await checkpoint(); await ui('detach');
+        await spoken(); await checkpoint(); await ui('detach');
         inOperation = true;
         try { await step.run(prepared.context); await step.verify(prepared.context); }
         finally { inOperation = false; }
@@ -140,6 +174,7 @@ async function run(input) {
     await capture('complete');
     finalUpdate = { state: 'completed', completed: total, index: total, total };
   } catch (error) {
+    await stopVoice();
     const cancelled = stopped || closing || error instanceof Stopped;
     let message = preparing ? '准备环境未完成。请检查 Chrome、Profile、角色与本地连接；登录与私密参数未写入日志。'
       : String(error.message || error).replace(/\x1b\[[0-9;]*m/g, '').replace(/(password|token|secret|authorization|cookie)(["'\s:=]+)[^\s,}\n]+/gi, '$1$2[已隐藏]').slice(0, 1000);
@@ -147,6 +182,7 @@ async function run(input) {
     finalUpdate = { state: cancelled ? 'stopped' : 'failed', ...(cancelled ? {} : { error: message }) };
     try { await inject(); await ui('center', { eyebrow: cancelled ? '演示已停止' : '当前步骤未完成', title: cancelled ? '可以从头重新播放' : current.stepTitle || '准备环境', description: cancelled ? '后续操作已停止。已完成的业务操作不会自动撤销。' : message, phase: cancelled ? 'stopped' : 'error' }); } catch {}
   } finally {
+    narrationAbort.abort(); await stopVoice();
     if (release) { try { await release(); } catch { finalUpdate = { state: 'failed', error: '环境释放未完成，请核对本轮临时资源' }; } }
     running = false; inOperation = false;
     if (stopped || closing) await browser?.close().catch(() => {});
@@ -163,7 +199,7 @@ async function commandHandler({ command, config: input }) {
     catch { change({ warning: '演示窗口未能置前，请检查受控浏览器窗口。' }); }
     if (requested === pauseVersion && !stopped && !closing) { paused = false; await state(); }
   }
-  if (command === 'stop') { pauseVersion++; stopped = true; paused = false; await state(); setTimeout(() => browser?.close().catch(() => {}), 1800).unref(); }
-  if (command === 'close') { pauseVersion++; closing = true; stopped = true; paused = false; await browser?.close().catch(() => {}); if (!running) process.exit(0); }
+  if (command === 'stop') { pauseVersion++; stopped = true; paused = false; narrationAbort?.abort(); await stopVoice(); await state(); setTimeout(() => browser?.close().catch(() => {}), 1800).unref(); }
+  if (command === 'close') { pauseVersion++; closing = true; stopped = true; paused = false; narrationAbort?.abort(); await stopVoice(); await browser?.close().catch(() => {}); if (!running) process.exit(0); }
 }
 receive(message => void commandHandler(message));

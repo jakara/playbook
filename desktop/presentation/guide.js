@@ -3,7 +3,7 @@
   const root = document.createElement('div');
   root.id = 'ygd-root'; root.setAttribute('popover', 'manual');
   root.innerHTML = `
-    <svg id="ygd-shade" aria-hidden="true"><defs><mask id="ygd-mask"><rect width="100%" height="100%" fill="white"/><circle id="ygd-hole" cx="-200" cy="-200" r="105" fill="black"/></mask></defs><rect width="100%" height="100%" fill="#1c2535" fill-opacity=".56" mask="url(#ygd-mask)"/></svg>
+    <svg id="ygd-shade" aria-hidden="true"><defs><radialGradient id="ygd-feather"><stop id="ygd-feather-inner" offset="77%" stop-color="black"/><stop offset="100%" stop-color="white"/></radialGradient><mask id="ygd-mask"><rect width="100%" height="100%" fill="white"/><circle id="ygd-hole" cx="-200" cy="-200" r="105" fill="url(#ygd-feather)"/></mask></defs><rect width="100%" height="100%" fill="#1c2535" fill-opacity=".56" mask="url(#ygd-mask)"/></svg>
     <div id="ygd-cursor" aria-hidden="true"><span class="ygd-halo"></span><svg viewBox="0 0 32 40"><path d="M3 2 L3 31 L11 23 L17 37 L23 34 L17 20 L29 20 Z" fill="white" stroke="#142139" stroke-width="2.4" stroke-linejoin="round"/></svg><span class="ygd-ripple"></span></div>
     <section id="ygd-card" aria-live="polite" hidden></section>
 `;
@@ -39,8 +39,13 @@
     state({ phase, title: phase === 'done' ? '演示已完成' : '核心操作流程', count: phase === 'done' ? '已完成' : '准备就绪', progress: phase === 'done' ? 100 : 0 });
   }
   const escape = value => String(value || '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' })[char]);
-  let radius = 105;
-  function configure(value) { radius = value.spotlightRadius || 105; root.querySelector('#ygd-shade > rect').setAttribute('fill-opacity', value.overlayOpacity ?? .56); }
+  let radius = 105, feather = 24;
+  function configure(value) {
+    radius = value.spotlightRadius ?? 105; feather = value.spotlightFeather ?? 24;
+    $('#ygd-feather-inner').setAttribute('offset', `${Math.max(0, 1 - feather / radius) * 100}%`);
+    hole.setAttribute('fill', feather ? 'url(#ygd-feather)' : 'black');
+    root.querySelector('#ygd-shade > rect').setAttribute('fill-opacity', value.overlayOpacity ?? .56);
+  }
   function highlight(element, step) {
     card.hidden = true; cursor.hidden = false; hole.setAttribute('r', radius); bringForward(element);
     driver.highlight({ element, popover: {
@@ -61,6 +66,6 @@
     cursor.classList.remove('ygd-click'); void cursor.offsetWidth; cursor.classList.add('ygd-click');
   }
   window.playbookGuide = { configure, center, highlight, state, place: ({ x, y }) => place(x, y), detach, clickEffect, position: () => position, bringForward,
-    inspect: () => ({ phase: root.dataset.phase, x: position.x, y: position.y, apertureX: Number(hole.getAttribute('cx')), apertureY: Number(hole.getAttribute('cy')), cardVisible: !card.hidden, popoverVisible: !!document.querySelector('.ygd-popover') }) };
+    inspect: () => ({ phase: root.dataset.phase, x: position.x, y: position.y, apertureX: Number(hole.getAttribute('cx')), apertureY: Number(hole.getAttribute('cy')), spotlightFeather: feather, cardVisible: !card.hidden, popoverVisible: !!document.querySelector('.ygd-popover') }) };
   place(position.x, position.y);
 })();

@@ -2,7 +2,7 @@
 
 ## 共享模式（默认）
 
-沿用业务已有的 `test` fixture、项目和配置，准备与脚本类型相匹配的 context，然后调用 `runPlaybook`，用 `test.step` 包裹每一步。不调用演示 beforeStep，不加载 Driver.js，不等待阅读停留或光标动画。
+沿用业务已有的 `test` fixture、项目和配置，准备与脚本类型相匹配的 context，然后调用 `runPlaybook`，用 `test.step` 包裹每一步。不调用演示 beforeStep，不加载 Driver.js，不等待阅读停留、光标动画或语音，不应用打码。runPlaybook 忽略柔边光圈、redactions 与 narration 等纯呈现字段。
 
 从 `.playbook.json` 的 Profile 引用与现有 tests 确认真实 setup/teardown。defineProfile 的 prepare(page/workspaceDir/parameters) 是演示适配，不自动成为测试 fixture；若复用其业务 helpers，保留真实配置、登录与释放语义。只有步骤而无已知测试环境入口时，交付适配代码与明确依赖；依赖未实现前不能标为可执行 TC。
 
@@ -10,7 +10,7 @@
 
 ## 独立模式
 
-用户要求脱离 Playbook 时，将每步 `run` 和 `verify` 按顺序展开到标准 `@playwright/test` 的 `test.step`，保留自由变量绑定、helper imports、fixture 和清理。移除演示呈现元数据及纯视觉等待，不删除实现业务时序所需的事件、导航和轮询。
+用户要求脱离 Playbook 时，将每步 `run` 和 `verify` 按顺序展开到标准 `@playwright/test` 的 `test.step`，保留自由变量绑定、helper imports、fixture 和清理。移除 presentation、redactions、narration 及纯视觉/语音等待，不复制录音或生成系统语音调用，不将打码转成 DOM 修改或测试前置动作；不删除实现业务时序所需的事件、导航和轮询。
 
 “独立”默认指 TC 不再依赖 Playbook SDK 或脚本，仍可引用原业务 fixture/helper。例如 `tests/exported/course.spec.ts` 继续从 `../fixtures.js` 导入项目的 test。不要仅为独立导出复制一份 fixture；只有明确要求可移植包或隔离验证无法引用原目录时才复制/提取所需文件，并记录来源和同步责任。用户要求单文件或脱离业务仓库分发时，另外核对所有依赖是否已实际打包，不把普通独立 TC 冒充自包含交付包。
 

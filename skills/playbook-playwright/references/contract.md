@@ -1,6 +1,6 @@
 # 当前桌面契约：schemaVersion 1
 
-适用于客户端 v0.2、内置 Skill 0.4.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
+适用于客户端 v0.3、内置 Skill 0.5.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`schemaVersion` 仍为 `1`，旧脚本向后兼容。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
 
 ## 工作区与清单
 
@@ -43,7 +43,7 @@ import type { Context } from '../profiles/local.profile';
 export default definePlaybook<Context>({
   schemaVersion: 1, id: 'courses.search', title: '查找课程',
   summary: '通过名称筛选本地合成页面中的课程。',
-  presentation: { spotlightRadius: 105, overlayOpacity: 0.56, cursorMoveMs: 900, defaultHoldMs: 2600, openingMs: 2800 },
+  presentation: { spotlightRadius: 105, spotlightFeather: 24, overlayOpacity: 0.56, cursorMoveMs: 900, defaultHoldMs: 2600, openingMs: 2800 },
   requirements: { dataMode: 'fixture', effects: 'read-only', replay: 'safe', roles: [] },
   steps: [{
     id: 'search', title: '筛选课程', explain: '输入“校园海报”，再查看筛选结果。',
@@ -98,10 +98,35 @@ roles 必须由实际认证与授权上下文支撑；运行器只核对声明�
 | requirements.replay | safe 不需还原持久业务状态；reset-required 需已验证恢复；single-run 没有已验证的再次运行方案 |
 | steps[].target | 可选 `(context) => Locator`，只定位；桌面要求唯一可见目标，无目标时中央说明 |
 | steps[].run / verify | 必需的原生异步 callbacks，依次执行，保留 Locator、事件顺序与有效预期 |
-| 流程 presentation | spotlightRadius 40–300；overlayOpacity 0–0.9；cursorMoveMs 150–5000；defaultHoldMs 0–60000；openingMs 0–30000 |
+| 流程 presentation | spotlightRadius 40–300；spotlightFeather 0–100 px（默认 24，0 为硬边）；overlayOpacity 0–0.9；cursorMoveMs 150–5000；defaultHoldMs 0–60000；openingMs 0–30000 |
 | 步骤 presentation | chapter；side 为 top/right/bottom/left；holdMs、afterMs 均为 0–60000 |
+| 流程 redactions | 可选数组；每项 `{ selector, mode?, label?, blurPx?, padding? }`。selector 是 CSS 选择器；mode 为 cover（默认不透明遮盖）或 blur；blurPx 为 1–40 px；padding 为 0–40 px |
+| 流程 narration | 可选 `{ enabled?, voice?, rate?, opening? }`；默认不启用。rate 为 80–400 的整数（words/min）；opening 为 false 或 `{ text?, audio? }` |
+| 步骤 narration | false 跳过；或 `{ text?, audio? }`，可在流程未启用时单独启用本步。text 与 audio 互斥 |
 
 时间单位为毫秒。播放器默认光圈 105、蒙层 0.56、移光标 900、讲解停留 2600、开场 2800；步骤 afterMs 默认 550。步骤 holdMs 覆盖流程 defaultHoldMs。holdMs 用于操作前讲解，afterMs 用于 run 和 verify 成功后阅读；不能替代断言、ready 条件、导航或事件等待。呈现层不重复执行业务点击。
+
+### 打码与语音
+
+`redactions` 定义在流程顶层，不放进 step。使用实际页面上的稳定 CSS 选择器；它会随页面滚动、重渲染、弹窗和同一主页面导航重新定位。遮盖层不拦截点击，业务目标仍由原生 Locator 操作。不要修改元素内容或业务 CSS 来打码，也不要把打码目标误写成 Playwright `getByRole()` 表达式。默认 cover 适合隐藏 logo、姓名和数值；blur 仅作视觉模糊，不保证内容不可辨识。两者都只影响演示观看，原值仍在 DOM、网络响应和业务存储中，不是安全脱敏机制；更高保密要求应先提供适当的演示数据/环境。跨 frame、新页面仍需另行适配。
+
+```ts
+// 放在 definePlaybook 的顶层 literal 对象中
+redactions: [
+  { selector: '[data-demo="brand"]', mode: 'cover', label: '品牌已遮盖', padding: 4 },
+  { selector: '[data-demo="customer-name"]', mode: 'cover' },
+],
+narration: { enabled: true, voice: 'Tingting', rate: 185 },
+// 单步内可覆盖：narration: { text: '输入课程名称，查看匹配的课程。' }
+// 使用录音：narration: { audio: 'demos/audio/search.mp3' }
+// 静音本步：narration: false
+```
+
+流程 `narration.enabled: true` 时，开场默认朗读 title 与 summary，每步默认朗读 explain。`opening: false` 关闭开场语音，步骤 `narration: false` 跳过本步；对象可覆盖相应讲稿或录音。文字与录音二选一，不能同时填写。语音与提示/光标演示配合播放，当前讲解与最短 hold 都完成后才执行该步操作；暂停、继续、停止同步作用于语音。没有声音、音频无效或生成失败须明确失败，不能只用阅读等待冒充语音完成。
+
+文字朗读使用 macOS 本地 `say` 生成 WAV，默认中文声线 Tingting、语速 185 words/min，无需云服务账户；系统缺少所选声线时按实际错误修复。其他平台暂使用已有本地录音，不宣称系统语音已经适配。audio 必须是工作区内的相对文件路径，支持 wav/mp3/m4a/ogg，单文件不超过 20 MB；不填绝对路径、越界路径或网络 URL。录音作为本轮快照冻结，源文件更新下一轮生效；不把音频放入产品仓库。
+
+开场、explain 和自定义讲稿均不得包含被遮盖的实际敏感值。语音文件也可能含敏感信息，交付前核对内容与目标观众。无需语音的旧脚本保持静音，不为迁移版本擅自启用朗读。
 
 read-only/replay 声明不是拦截器或代码沙箱。依据真实业务实现必要的写入限制、基线和结束校验，只执行用户认可且目标已授权的资产。
 
@@ -111,7 +136,7 @@ read-only/replay 声明不是拦截器或代码沙箱。依据真实业务实现
 2. 用当前 Playbook 可执行文件传入 `--check-workspace <工作区绝对路径>`。它只检查静态元数据、清单引用与编译打包，不执行 Profile 或浏览器；结果明确为 `typecheck: not-run`、`browser: not-run`。esbuild 编译成功不等于 TypeScript 类型通过。
 3. 在已授权环境从桌面添加项目，选择脚本、Section 或 Book 及 Profile，实际播放并核对业务结果、顺序、说明遮挡、暂停继续、停止和重播。Book/Section 批量播放须核对每个脚本的准备和释放。涉及写入与恢复时按真实风险验证。
 
-桌面按本轮快照播放，源资产变更影响下一轮。清单、Profile、脚本和静态相对 imports 参与变更检测；运行时读取的私有配置不等于已纳入代码指纹。不要修改应用缓存来替代业务源文件。
+桌面按本轮快照播放，源资产变更影响下一轮。清单、Profile、脚本、静态相对 imports 与声明的录音参与变更检测；运行时读取的私有配置不等于已纳入代码指纹。不要修改应用缓存来替代业务源文件。新增打码实际播放检查滚动/弹窗/导航后的遮盖与可交互性；新增语音检查内容、时序和暂停/继续/停止，静态检查不能证明听到声音。
 
 ## 客户端控制与页面呈现
 
@@ -121,7 +146,7 @@ read-only/replay 声明不是拦截器或代码沙箱。依据真实业务实现
 
 ## TC 复用与独立导出
 
-runPlaybook 接收一个可执行脚本，不接收清单 Book/Section。它顺序执行 `beforeStep → run → verify → afterStep`，可由 aroundStep 包裹一次，异常向上传播。它不创建浏览器、准备 Profile、渲染讲解或管理暂停停止，也不等待阅读时间。
+runPlaybook 接收一个可执行脚本，不接收清单 Book/Section。它顺序执行 `beforeStep → run → verify → afterStep`，可由 aroundStep 包裹一次，异常向上传播。它不创建浏览器、准备 Profile、渲染讲解、播放语音、应用打码或管理暂停停止，也不等待阅读时间。独立 TC 导出忽略 spotlightFeather、redactions、narration 等纯呈现元数据，保留真实动作和断言，不将遮盖转成 DOM 修改或测试前置操作。
 
 以下是绑定业务已有 fixture 的形状示例，不附带虚构 fixture 实现：
 

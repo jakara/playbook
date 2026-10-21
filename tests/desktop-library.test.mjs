@@ -121,3 +121,19 @@ test('legacy demos normalize to a Book and a Section without losing playback ord
   assert.deepEqual(selection(workspace, book.id, 'book').items.map(item => item.id), ['starter.overview', 'starter.catalog']);
   assert.deepEqual(selection(workspace, book.sections[0].key, 'section').items.map(item => item.id), ['starter.overview', 'starter.catalog']);
 });
+
+test('static metadata retains narration, redactions and flow presentation without evaluating callbacks', () => {
+  const source = `throw new Error('do not execute'); export default definePlaybook({schemaVersion:1,id:'flow',title:'A',
+    presentation:{spotlightFeather:24}, redactions:[{selector:'.logo',mode:'cover',label:'隐藏'}],
+    narration:{enabled:true,voice:'Tingting',rate:180,opening:{audio:'audio/opening.mp3'}},
+    requirements:{dataMode:'fixture',effects:'read-only',replay:'safe',roles:[]},
+    steps:[{id:'one',title:'One',explain:'Explain',narration:{text:'步骤讲解'},run:()=>{throw new Error('do not execute')},verify:()=>{}}]});`;
+  const result = metadata(source, 'sample.ts');
+  assert.deepEqual(result.presentation, { spotlightFeather: 24 });
+  assert.deepEqual(result.redactions, [{ selector: '.logo', mode: 'cover', label: '隐藏' }]);
+  assert.deepEqual(result.narration, { enabled: true, voice: 'Tingting', rate: 180, opening: { audio: 'audio/opening.mp3' } });
+  assert.deepEqual(result.steps[0].narration, { text: '步骤讲解' });
+  assert.throws(() => metadata(source.replace('spotlightFeather:24', 'spotlightFeather:-1'), 'bad.ts'), /spotlightFeather/);
+  assert.throws(() => metadata(source.replace("audio:'audio/opening.mp3'", 'audio:process.env.SECRET'), 'dynamic.ts'), /静态/);
+  assert.throws(() => metadata(source.replace("audio:'audio/opening.mp3'", '...getAudio()'), 'spread.ts'), /静态/);
+});

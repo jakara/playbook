@@ -18,7 +18,7 @@ manifest.books = [{ id: 'teacher-training', title: '教师首次使用培训', s
   { id: 'courses', title: '课程与任务', scripts: ['starter.catalog'] },
 ] }];
 await writeFile(manifestFile, JSON.stringify(manifest, null, 2));
-const output = path.join(root, 'artifacts', `${process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'v021-packaged-smoke' : 'v021-desktop-smoke'}-${Date.now()}`); await mkdir(output, { recursive: true });
+const output = path.join(root, 'artifacts', `${process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'v03-packaged-smoke' : 'v03-desktop-smoke'}-${Date.now()}`); await mkdir(output, { recursive: true });
 await mkdir(userData, { recursive: true });
 // The single-run record must survive beyond the UI's recent 100 rows.
 await writeFile(path.join(userData, 'runs.json'), JSON.stringify([
