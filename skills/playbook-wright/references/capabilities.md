@@ -1,6 +1,8 @@
 # 可用功能与选择方式
 
-适配播放器 v0.3 系列、Skill 0.5.2，清单/脚本/Profile 的 `schemaVersion: 1`。本页是功能入口；完整类型、数值范围与生命周期以 [契约](contract.md) 为准。先依据用户目标挑选所需能力，不把整张清单变成必答问卷，也不默认给所有脚本加语音或打码。
+适配播放器 v0.3 系列、Skill 0.6.0，清单/脚本/Profile 的 `schemaVersion: 1`。本页是功能入口；完整类型、数值范围与生命周期以 [契约](contract.md) 为准。先依据用户目标挑选所需能力，不把整张清单变成必答问卷，也不默认给所有脚本加语音或打码。
+
+主调用名 `$playbook-wright`，旧 `$playbook-playwright` 是读取同一主 Skill 的兼容入口。安装时同时预览两个目录并识别旧版安装；两个入口都通过校验才显示安装成功。
 
 ## 项目、内容与创作
 
@@ -99,7 +101,7 @@ narration: { enabled: true, voice: 'Tingting', rate: 185 },
 | 结果反馈 | 查看成功/失败/停止记录、进度、耗时和错误，复制上下文交给用户自己的智能体；客户端不自动发送消息或上传模型 |
 | TC → script | [保留 fixture、动作、断言与事件顺序并适配 Profile](tc-to-playbook.md)，再添加演示说明与效果；不承诺任意 TC 一键无损转换 |
 | script → TC | [共享 runPlaybook 或独立展开 run/verify](playbook-to-tc.md)，保留测试生命周期。TC 不播放语音、引导、打码或阅读动画；Book/Section 先按引用顺序展开 |
-| 随包 Skill 安装 | 客户端“Skill 安装”支持 Codex/Claude Code 的个人或指定项目范围；项目通过“选择文件夹/更换文件夹”指定，不限已登记的演示目录，也不要求 .playbook.json。Codex 追加 .agents/skills/playbook-playwright，Claude Code 追加 .claude/skills/playbook-playwright，不自动猜测上级仓库；选择和取消不写文件、不登记演示项目。预览版本、目标与冲突，更新先备份，修改内容须明确选择替换；软链接不写入 |
+| 随包 Skill 安装 | 客户端“Skill 安装”支持 Codex/Claude Code 的个人或指定项目范围；项目通过“选择文件夹/更换文件夹”指定，不限已登记的演示目录，也不要求 .playbook.json。Codex 追加 .agents/skills/playbook-wright，Claude Code 追加 .claude/skills/playbook-wright，不自动猜测上级仓库；选择和取消不写文件、不登记演示项目。预览版本、目标与冲突，更新先备份，修改内容须明确选择替换；软链接不写入 |
 | Skill 生效 | 安装只核验文件落盘，不自动修改模型、全局规则或 hooks。更新后在目标智能体重新加载/开启新会话并确认调用；既有会话不会自动获得新版本知识 |
 
 声明 read-only 或重播策略不会自动拦截写入或重置业务数据，Profile 必须实现对应保障。`--check-workspace` 只做静态发现/引用/编译，独立类型检查、TC 回归、真实浏览器播放和人耳/实体输入验收分别记录；详见 [验证](contract.md#运行与验证)。业务副作用的授权与账号边界始终保留。

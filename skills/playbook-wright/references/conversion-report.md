@@ -4,7 +4,7 @@
 
 ## 来源与运行目标
 
-记录转换方向、原文件/完整测试标题或流程 ID、可获取的版本、输出清单/脚本/Profile/TC、schemaVersion、Skill 与 SDK 版本、使用的 Playwright project/config、数据类别、角色与副作用。涉及编排时记录 Book/Section 与脚本对应关系。Skill 安装页当前为 0.5.2，适配客户端 v0.3，schemaVersion 仍为 1；不将它们当成 SDK 包版本。新增或移除打码/语音等纯呈现元数据时记录其桌面验证范围，不计入 TC 业务语义。无法获得的值写未知，不编造 commit。
+记录转换方向、原文件/完整测试标题或流程 ID、可获取的版本、输出清单/脚本/Profile/TC、schemaVersion、Skill 与 SDK 版本、使用的 Playwright project/config、数据类别、角色与副作用。涉及编排时记录 Book/Section 与脚本对应关系。Skill 安装页当前为 0.6.0，适配客户端 v0.3，schemaVersion 仍为 1；不将它们当成 SDK 包版本。新增或移除打码/语音等纯呈现元数据时记录其桌面验证范围，不计入 TC 业务语义。无法获得的值写未知，不编造 commit。
 
 ## 对应关系
 

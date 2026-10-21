@@ -1,3 +1,31 @@
+# 桌面 v0.3.3 / Skill 0.6.0 改名与兼容验证
+
+日期：2026-10-21，macOS Apple Silicon。用户确认只将主 Skill 改名为 playbook-wright，并保留旧 $playbook-playwright 调用；产品名、SDK 名、业务资产和 schemaVersion 保持原契约。
+
+## 实现与安装
+
+完整指引迁移到 skills/playbook-wright，旧目录只保留轻量兼容入口与 UI 元数据，读取同级主 Skill，不维护第二份契约。安装器同时预览两个目标，识别原 playbook-playwright 安装记录；任一目标有本地修改/冲突时先保护整组，软链接阻止安装。每个目录分别备份、原子替换和校验；第二个入口失败会报告部分完成并允许重试，不声称跨目录原子事务。安装页显示两个路径、各自版本和全部备份位置；复制给智能体的上下文默认使用新调用名。
+
+已按用户授权实际升级艺工学院根目录 .agents/skills：playbook-wright 主 Skill 与 playbook-playwright 兼容入口均为 0.6.0。迁移前的完整 0.5.2 旧安装（含安装记录）在应用备份目录保留，备份逐文件字节核验通过；两个新入口与产品来源校验一致。证据及恢复位置见 artifacts/yigong-root-skill-rename-install.json。没有更改业务脚本、服务或业务数据，也未安装到个人技能目录。
+
+## 实际验证
+
+- npm run desktop:build、npm run package:mac 通过；最终客户端 0.3.3。两个 Skill validator 与 19 个本地引用检查通过，最终包内全部 11 个 Skill 文件与产品源文件逐字节一致。
+- npm run desktop:check：49 通过、1 项仅适用非 macOS 的检查按平台跳过，其中安装器 18 项。新增覆盖双入口安装/记录、旧版迁移/备份、本地修改阻止整组写入、兼容软链接不写入，以及第二入口提交失败后的明确部分状态与安全重试。原有安装回滚、锁、越界与文件保护检查继续通过。
+- 最终应用包桌面检查 29/29，通过真实 Electron 页面、受限 IPC 与文件安装器确认双入口预览、安装、修改冲突与备份；页面错误 0。证据：artifacts/v03-packaged-smoke-1792587924165/（历史前缀，实际版本 0.3.3）。安装页截图已查看，主/兼容目标与状态可见。
+- 使用当前桌面应用随附 Codex 0.163.0-alpha.10.2 的 skills/list 强制刷新艺工根目录，两项均返回 scope=repo、enabled=true，相关发现错误为 0。
+- 同一随附 Codex 分别启动两次 ephemeral、read-only 调用：$playbook-wright 与 $playbook-playwright 均正常完成。实际命令读取入口、主指引和主能力索引，返回版本 0.6.0 及正确柔边、打码、朗读字段；旧名称调用明确读取兼容入口后转到新主 Skill。完整发现与调用证据：artifacts/skill-rename-codex-1792587839828/。
+
+## 验证边界与既有轮次
+
+未直接操作 Codex 桌面 $ 候选菜单：电脑控制工具禁止操作 Codex 自身，故明确采用其随附引擎的发现接口与两次实际调用。此前 Homebrew Codex 0.150.1 在读取现有新格式 features 配置时失败；未修改全局配置，改用桌面随附兼容版本后通过。原始失败及原名 0.5.2 验证证据仍保留于 artifacts/yigong-root-codex-invoke*。
+
+本轮 Codex 验证只读取 Skill，未运行艺工业务演示；桌面回归使用隔离合成项目。系统活动/文件选择返回仍按既有测试方式受控模拟，不代表实体输入验收。此前语音试听、跨应用焦点与其他平台的未验证范围保留。
+
+以下历史记录完整保留。
+
+---
+
 # 桌面 v0.3.2 / Skill 0.5.2 验证记录
 
 日期：2026-10-21，macOS Apple Silicon。范围：项目级 Skill 安装独立选择文件夹，解除与已登记演示工作区的绑定；播放引擎、业务资产和 schemaVersion 未变更。

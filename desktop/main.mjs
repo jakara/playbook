@@ -4,7 +4,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { readWorkspace, inside, selection, snapshot } from './library.mjs';
-import { FRAMEWORKS, targetFor, inspectSkill, installSkill } from './skill-installer.mjs';
+import { FRAMEWORKS, SKILL_NAMES, targetFor, inspectSkillBundle, installSkillBundle } from './skill-installer.mjs';
 import { createPlaybackControl } from './playback-control.mjs';
 
 app.setName('Playbook');
@@ -12,8 +12,8 @@ if (process.env.PLAYBOOK_USER_DATA) app.setPath('userData', path.resolve(process
 const appRoot = app.getAppPath();
 const starter = path.join(appRoot, 'examples/starter');
 const dataDir = app.getPath('userData');
-const skillDir = path.join(appRoot, 'skills/playbook-playwright');
-const skillVersion = '0.5.2';
+const skillDir = path.join(appRoot, 'skills/playbook-wright');
+const skillVersion = '0.6.0';
 const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;
@@ -26,7 +26,7 @@ const safeError = error => String(error?.message || error).replace(/\x1b\[[0-9;]
 
 function viewState() {
   return { workspaces: workspaces.map(workspace => ({ ...workspace, profiles: workspace.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
-    runs: runs.slice(0, 100), activeRun, playbackShortcut: shortcut, playbackControl: playbackControl?.state(), skill: { version: skillVersion, frameworks: FRAMEWORKS.map(({ id, name }) => ({ id, name })) } };
+    runs: runs.slice(0, 100), activeRun, playbackShortcut: shortcut, playbackControl: playbackControl?.state(), skill: { name: SKILL_NAMES[0], compatibilityName: SKILL_NAMES[1], version: skillVersion, frameworks: FRAMEWORKS.map(({ id, name }) => ({ id, name })) } };
 }
 function publish() { if (window && !window.isDestroyed()) window.webContents.send('playbook:state', viewState()); playbackControl?.publish(); }
 async function atomicJSON(file, value) {
@@ -241,7 +241,7 @@ app.whenReady().then(async () => {
     const workspace = workspaces.find(item => item.id === input.workspaceId);
     const run = runs.find(item => item.id === input.runId);
     const item = workspace?.items.find(item => item.id === input.entryId);
-    clipboard.writeText(`请使用 $playbook-playwright 帮我检查或调整下面的演示。保留业务动作、断言与数据边界。\n${JSON.stringify({ workspace: workspace?.path, manifest: '.playbook.json', kind: input.kind || 'script', entryId: input.entryId, script: item?.file, flowId: item?.id, run, skillVersion }, null, 2)}\n我的需求：`);
+    clipboard.writeText(`请使用 $playbook-wright 帮我检查或调整下面的演示。保留业务动作、断言与数据边界。\n${JSON.stringify({ workspace: workspace?.path, manifest: '.playbook.json', kind: input.kind || 'script', entryId: input.entryId, script: item?.file, flowId: item?.id, run, skillVersion }, null, 2)}\n我的需求：`);
   });
   handle('reveal', async input => {
     const workspace = workspaces.find(item => item.id === input.workspaceId);
@@ -258,8 +258,8 @@ app.whenReady().then(async () => {
     skillProjects.add(root);
     return root;
   });
-  handle('skillPreview', async input => inspectSkill(await installOptions(input)));
-  handle('skillInstall', async input => installSkill({ ...await installOptions(input), replace: input.replace === true }));
+  handle('skillPreview', async input => inspectSkillBundle(await installOptions(input)));
+  handle('skillInstall', async input => installSkillBundle({ ...await installOptions(input), replace: input.replace === true }));
   await playbackControl.ready;
   await window.loadFile(path.join(appRoot, 'build/ui/index.html'));
   setInterval(() => void refresh().catch(() => {}), 1400).unref();

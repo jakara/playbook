@@ -221,7 +221,7 @@ try {
   await chooseProject(null);
   await expect(page.getByLabel('项目文件夹', { exact: true })).toHaveValue('');
   await chooseProject(installProject);
-  const codexTarget = path.join(installProject, '.agents/skills/playbook-playwright');
+  const codexTarget = path.join(installProject, '.agents/skills/playbook-wright');
   await expect(page.getByLabel('项目文件夹', { exact: true })).toHaveValue(installProject);
   await expect(page.locator('.target-path').first()).toHaveText(codexTarget);
   await expect(page.getByRole('button', { name: '安装 Skill', exact: true })).toBeEnabled();
@@ -231,14 +231,17 @@ try {
   await expect(page.locator('.target-path').first()).toHaveText(codexTarget); checks.skillProjectCancel = true;
   await page.screenshot({ path: path.join(output, '04-project-folder-preview.png') });
   await page.getByLabel('使用的框架', { exact: true }).selectOption('claude-code');
-  await expect(page.locator('.target-path').first()).toHaveText(path.join(installProject, '.claude/skills/playbook-playwright'));
+  await expect(page.locator('.target-path').first()).toHaveText(path.join(installProject, '.claude/skills/playbook-wright'));
   await page.getByLabel('使用的框架', { exact: true }).selectOption('codex');
   await expect(page.locator('.target-path').first()).toHaveText(codexTarget); checks.skillFrameworkTargets = true;
   await page.getByRole('button', { name: '安装 Skill', exact: true }).click();
   await expect(page.getByRole('button', { name: '已安装当前版本', exact: true })).toBeVisible();
   const installed = path.join(codexTarget, 'SKILL.md');
   const installedText = await readFile(installed, 'utf8');
-  assert.equal(installedText, await readFile(path.join(root, 'skills/playbook-playwright/SKILL.md'), 'utf8')); checks.skillInstall = true;
+  assert.equal(installedText, await readFile(path.join(root, 'skills/playbook-wright/SKILL.md'), 'utf8')); checks.skillInstall = true;
+  const compatibility = path.join(installProject, '.agents/skills/playbook-playwright/SKILL.md');
+  assert.equal(await readFile(compatibility, 'utf8'), await readFile(path.join(root, 'skills/playbook-playwright/SKILL.md'), 'utf8'));
+  await expect(page.getByText(/兼容入口 \$playbook-playwright/)).toBeVisible(); checks.skillCompatibilityEntry = true;
   await writeFile(installed, installedText + '\n本地自定义内容\n');
   await page.getByRole('button', { name: '重新查看目标', exact: true }).click();
   await expect(page.getByRole('button', { name: '备份并替换 Skill', exact: true })).toBeDisabled();
@@ -253,7 +256,7 @@ try {
   const otherProject = path.join(temp, '另一个项目'); await mkdir(otherProject);
   await chooseProject(otherProject);
   await expect(page.getByLabel('项目文件夹', { exact: true })).toHaveValue(otherProject);
-  await expect(page.locator('.target-path').first()).toHaveText(path.join(otherProject, '.agents/skills/playbook-playwright'));
+  await expect(page.locator('.target-path').first()).toHaveText(path.join(otherProject, '.agents/skills/playbook-wright'));
   await expect(page.getByText('文件已安装，智能体加载状态待验证', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '安装 Skill', exact: true })).toBeEnabled();
   assert.deepEqual(await readdir(otherProject), []);

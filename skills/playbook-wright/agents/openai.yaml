@@ -1,0 +1,4 @@
+interface:
+  display_name: "playbook-wright"
+  short_description: "按完整功能清单创作演示，编排章节、引导、打码与语音，并复用测试"
+  default_prompt: "使用 $playbook-wright，先阅读可用功能索引，结合当前业务页面和需求选择编排、引导、打码与语音能力，生成或调整可验证脚本；保留业务动作、断言与数据边界，并区分客户端控制和脚本配置。"

@@ -62,3 +62,5 @@
 .run-step-section{font-size:9px;color:#8ea082;line-height:1.5;margin-bottom:3px}
 
 .project-picker{display:flex;gap:10px;align-items:center}.project-picker input{flex:1;min-width:0;height:36px;border:1px solid #e0e7d8;border-radius:5px;color:#718b60;font-size:11px;background:#fdfefa;padding:0 10px}.project-picker .button{flex-shrink:0}.form-hint{font-size:10px;line-height:1.7;color:#8ca178;margin-top:8px}
+
+.compat-target{border-top:1px solid #e0e7d8;margin-top:14px;padding-top:12px}.compat-target strong{font-size:10px;color:#718b60;font-weight:500}.compat-target small{display:block;font-size:9px;color:#8ca178;margin-top:8px}

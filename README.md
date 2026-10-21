@@ -19,7 +19,7 @@
 | 全局播放控制 | 原生悬浮条可拖动、可最小化，约 3 秒无输入自动隐藏，鼠标或键盘活动后显现；恢复播放时置前受控 Chrome；默认 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）播放/暂停，注册失败提示 |
 | 运行反馈 | 当前步骤、进度、成功/失败/停止记录；复制修改或错误上下文给自己的智能体 |
 | 文件变化 | 定期重新发现资产；本轮执行已构建快照，源文件变化提示下一轮生效 |
-| Skill 安装 | 随包 `playbook-playwright`，支持 Codex / Claude Code 的个人或指定项目目标；预览、安装、更新、冲突保护和备份核验 |
+| Skill 安装 | 随包 `playbook-wright`，支持 Codex / Claude Code 的个人或指定项目目标；预览、安装、更新、冲突保护和备份核验 |
 | 样例与测试复用 | `examples/starter` 是客户端入门样例；`examples/catalog` 保留原始 TC、共享流程 TC 与独立导出 TC |
 
 功能实现与验收结论分开记录。具体检查范围、结果和证据见 [验收记录](docs/verification.md)。
@@ -55,7 +55,7 @@ npm run package:mac
 
 ## 接入自己的项目
 
-让自己的智能体使用 [Playbook Skill](skills/playbook-playwright/SKILL.md)，先从 [完整能力索引](skills/playbook-playwright/references/capabilities.md) 了解功能，按当前 [契约](skills/playbook-playwright/references/contract.md) 维护工作区。参考布局：
+让自己的智能体使用 [Playbook Skill](skills/playbook-wright/SKILL.md)，先从 [完整能力索引](skills/playbook-wright/references/capabilities.md) 了解功能，按当前 [契约](skills/playbook-wright/references/contract.md) 维护工作区。参考布局：
 
 ```text
 business-project/
@@ -109,21 +109,23 @@ macOS 通过本地 `say` 生成 WAV，默认中文声线 Tingting、语速 185 w
 
 ## 安装 Skill 与创作
 
+主 Skill 已改名为 `playbook-wright`，推荐使用 `$playbook-wright`；安装器同时安装 `playbook-playwright` 兼容入口，旧 `$playbook-playwright` 仍可调用同一主指引。两个目标分别检查、备份与核验，不覆盖本地修改而不提示。
+
 进入“Skill 安装”，选择框架、个人或指定项目范围。项目安装点击“选择文件夹”指定智能体打开的项目目录，可以随时更换；不必已登记到 Playbook，也不要求已有 .playbook.json。目标按所选框架追加固定的 Skill 子目录，核对完整路径、版本与已有内容后点击安装。选择文件夹与预览不写入，也不登记演示项目；内置样例不作安装目标。
 
 更新会先备份；发现修改或冲突时，须明确勾选“先备份再替换已有内容”。符号链接目标不写入，同版本且校验一致时不重复安装。安装器不修改全局规则、hooks、模型设置或凭据；文件安装成功不等于目标智能体已加载，仍需在该智能体中确认。
 
 请求示例：
 
-> 使用 `$playbook-playwright`，为首次使用的老师设计一段课程查找和任务预览演示，补齐必要信息并生成可验证的 Playbook script。
+> 使用 `$playbook-wright`，为首次使用的老师设计一段课程查找和任务预览演示，补齐必要信息并生成可验证的 Playbook script。
 
-> 使用 `$playbook-playwright`，把任务预览多停留四秒，提示改到下方；保留原业务动作与断言。
+> 使用 `$playbook-wright`，把任务预览多停留四秒，提示改到下方；保留原业务动作与断言。
 
-> 使用 `$playbook-playwright`，将光圈边缘变柔和，遮盖页面 logo 和客户姓名，并用本地中文语音同步讲解；保持现有业务操作和断言。
+> 使用 `$playbook-wright`，将光圈边缘变柔和，遮盖页面 logo 和客户姓名，并用本地中文语音同步讲解；保持现有业务操作和断言。
 
-> 使用 `$playbook-playwright`，将指定 Playwright TC 转为演示流程，保留原断言、fixture 和数据边界，列出未映射依赖与验证结果。
+> 使用 `$playbook-wright`，将指定 Playwright TC 转为演示流程，保留原断言、fixture 和数据边界，列出未映射依赖与验证结果。
 
-> 使用 `$playbook-playwright`，把指定 Playbook 脚本导出为独立 Playwright TC，保留准备、断言和清理逻辑。
+> 使用 `$playbook-wright`，把指定 Playbook 脚本导出为独立 Playwright TC，保留准备、断言和清理逻辑。
 
 客户端只复制上下文到剪贴板，不自动发给智能体或上传外部模型。TC 转换是 Skill 辅助的提取、适配与验证，不承诺任意测试文件一键全自动转换。
 

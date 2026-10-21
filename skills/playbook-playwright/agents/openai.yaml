@@ -1,4 +1,4 @@
 interface:
-  display_name: "Playbook 脚本创作与维护"
-  short_description: "按完整功能清单创作演示，编排章节、引导、打码与语音，并复用测试"
-  default_prompt: "使用 $playbook-playwright，先阅读可用功能索引，结合当前业务页面和需求选择编排、引导、打码与语音能力，生成或调整可验证脚本；保留业务动作、断言与数据边界，并区分客户端控制和脚本配置。"
+  display_name: "playbook-wright（旧调用名兼容）"
+  short_description: "兼容旧名称，读取主 playbook-wright Skill 完成演示创作和维护"
+  default_prompt: "使用 $playbook-playwright，先读取同级 playbook-wright 主 Skill，按当前契约完成我的演示需求。"

@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.3.2，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.5.2。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-21。客户端 v0.3.3，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.6.0。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -165,12 +165,12 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 ## 内置 Skill 安装
 
-随包来源为 `skills/playbook-playwright/`。当前目标：
+主 Skill 来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
 
 | 框架 | 个人目标 | 项目目标 |
 |---|---|---|
-| Codex | `~/.agents/skills/playbook-playwright` | `<project>/.agents/skills/playbook-playwright` |
-| Claude Code | `~/.claude/skills/playbook-playwright` | `<project>/.claude/skills/playbook-playwright` |
+| Codex | `~/.agents/skills/playbook-wright` | `<project>/.agents/skills/playbook-wright` |
+| Claude Code | `~/.claude/skills/playbook-wright` | `<project>/.claude/skills/playbook-wright` |
 
 用户先选框架/范围；项目范围通过系统文件夹选择器指定任意现有项目目录，不限已登记的演示目录，也不要求 .playbook.json。主进程只接受本次应用会话中通过选择器选过、仍可访问且未被重定向的目录；不自动猜测上级仓库。按框架追加上述固定子目录，预览完整目标、版本、文件数和状态，明确点击才写入。取消选择保留旧目标，更换目录重新预览；选择和预览不写 Skill、不登记演示项目。内置样例不能作项目目标；不支持改写框架子目录或自动批量安装。
 
@@ -182,7 +182,7 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 | `modified` / `conflict` | 须勾选“先备份再替换已有内容” |
 | `symlink` | 保留原链接，不安装 |
 
-安装器快照并哈希校验来源与目标，拒绝软链接、越界和不支持的文件类型；目标变化则停止。已有内容在应用 `backups/skills/` 完整备份并核验，附恢复说明，再替换与核验；失败尝试恢复。客户端尚无一键恢复页面。
+安装器快照并哈希校验来源与目标，拒绝软链接、越界和不支持的文件类型；目标变化则停止。已有内容在应用 `backups/skills/` 完整备份并核验，附恢复说明，再替换与核验；失败尝试恢复。客户端尚无一键恢复页面。两个入口预先检查，任一有修改或冲突都须明确替换后才开始写入；兼容入口为软链接则整组阻止。按主入口、兼容入口顺序分别执行原子替换和核验；第二个入口失败会报告部分完成并保留已完成主入口，可重新检查后重试，不把跨目录安装称为单次原子事务。界面展示全部目标和备份路径。
 
 仅处理所选 Skill 子目录，不改全局规则、hooks、模型设置或凭据；额外文件按安装规则尽量保留，同名冲突原件留在备份。文件安装成功不表示智能体已加载，当前未探测加载状态。
 

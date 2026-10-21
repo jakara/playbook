@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 
-const SKILL = 'playbook-playwright';
+export const SKILL_NAMES = Object.freeze(['playbook-wright', 'playbook-playwright']);
 const RECORD = '.playbook-install.json';
 
 // Verified against the official documentation on 2026-10-21.
@@ -22,11 +22,12 @@ function absolute(value, label) {
   return path.resolve(value);
 }
 
-export function targetFor({ framework, scope, home = homedir(), projectRoot } = {}) {
+export function targetFor({ framework, scope, home = homedir(), projectRoot, skillName = SKILL_NAMES[0] } = {}) {
   const entry = FRAMEWORKS.find(item => item.id === framework);
   if (!entry) throw fail('INVALID_FRAMEWORK', '请选择支持的智能体。');
   if (scope !== 'user' && scope !== 'project') throw fail('INVALID_SCOPE', '安装范围必须为 user 或 project。');
-  return path.join(absolute(scope === 'user' ? home : projectRoot, scope === 'user' ? '用户目录' : '项目目录'), scope === 'user' ? entry.userDirectory : entry.projectDirectory, SKILL);
+  if (!SKILL_NAMES.includes(skillName)) throw fail('INVALID_SKILL', '不支持此 Skill 名称。');
+  return path.join(absolute(scope === 'user' ? home : projectRoot, scope === 'user' ? '用户目录' : '项目目录'), scope === 'user' ? entry.userDirectory : entry.projectDirectory, skillName);
 }
 
 async function statOrNull(file) {
@@ -93,10 +94,10 @@ function fileHashes(nodes) {
   return Object.fromEntries([...nodes].filter(([name, node]) => name && name !== RECORD && node.type === 'file').map(([name, node]) => [name, node.hash]));
 }
 
-function validRecord(data) {
+function validRecord(data, skill) {
   try {
     const record = JSON.parse(data.toString('utf8'));
-    if (record.schemaVersion !== 1 || record.skill !== SKILL || typeof record.version !== 'string' || !record.version || !record.files || Array.isArray(record.files) || typeof record.files !== 'object' || !record.files['SKILL.md']) return null;
+    if (record.schemaVersion !== 1 || record.skill !== skill || typeof record.version !== 'string' || !record.version || !record.files || Array.isArray(record.files) || typeof record.files !== 'object' || !record.files['SKILL.md']) return null;
     for (const [name, hash] of Object.entries(record.files)) {
       if (!name || name === RECORD || name.includes('\\') || path.posix.isAbsolute(name) || name.split('/').some(part => !part || part === '.' || part === '..') || !/^[a-f0-9]{64}$/.test(hash)) return null;
     }
@@ -108,11 +109,12 @@ async function examine({ sourceDir, targetDir, version }) {
   if (typeof version !== 'string' || !version.trim() || version.length > 128) throw fail('INVALID_VERSION', '请提供有效的 Skill 版本。');
   sourceDir = absolute(sourceDir, '来源目录');
   targetDir = absolute(targetDir, '目标目录');
-  if (path.basename(targetDir) !== SKILL) throw fail('INVALID_TARGET', `安装目标必须为 ${SKILL} 子目录。`);
+  const skill = path.basename(targetDir);
+  if (!SKILL_NAMES.includes(skill)) throw fail('INVALID_TARGET', '安装目标必须为主 Skill 或旧调用名兼容子目录。');
   const source = await snapshot(sourceDir);
   if (!source || source.get('')?.type !== 'directory' || source.get('SKILL.md')?.type !== 'file') throw fail('INVALID_SOURCE', '来源必须是含 SKILL.md 的 Skill 目录。');
   if (source.has(RECORD)) throw fail('INVALID_SOURCE', `来源不能包含安装器保留文件 ${RECORD}。`);
-  const base = { targetDir, version, fileCount: Object.keys(fileHashes(source)).length };
+  const base = { name: skill, targetDir, version, fileCount: Object.keys(fileHashes(source)).length };
   if ((await statOrNull(targetDir))?.isSymbolicLink()) return { source, result: { ...base, status: 'symlink', message: '目标是软链接，已保留且不会写入；请手动处理该链接。' } };
   const realSource = await fs.realpath(sourceDir);
   const realTarget = await canonicalDestination(targetDir);
@@ -125,7 +127,7 @@ async function examine({ sourceDir, targetDir, version }) {
   }
   const state = (status, message, record) => ({ source, target, record, result: { ...base, status, ...(record ? { installedVersion: record.version } : {}), message } });
   if (!target) return state('new', '尚未安装，可安装内置 Skill。');
-  const record = target.get(RECORD)?.type === 'file' ? validRecord(target.get(RECORD).data) : null;
+  const record = target.get(RECORD)?.type === 'file' ? validRecord(target.get(RECORD).data, skill) : null;
   if (!record || target.get('')?.type !== 'directory') return state('conflict', '目标已存在且不属于可识别的 Playbook 安装；替换前须确认并备份。');
   const hashes = fileHashes(target);
   const modified = Object.entries(record.files).some(([name, hash]) => hashes[name] !== hash);
@@ -181,12 +183,12 @@ function mergePayload(source, target, record) {
   return { merged, preserved, collisions };
 }
 
-async function backupTarget(targetDir, backupRoot, original) {
+async function backupTarget(targetDir, backupRoot, original, skill) {
   backupRoot = absolute(backupRoot, '备份目录');
   const rootStat = await statOrNull(backupRoot);
   if (rootStat && (!rootStat.isDirectory() || rootStat.isSymbolicLink())) throw fail('INVALID_BACKUP', '备份目录必须是普通目录，不能使用软链接。');
   await fs.mkdir(backupRoot, { recursive: true });
-  const container = await fs.mkdtemp(path.join(backupRoot, `${SKILL}-${Date.now()}-`));
+  const container = await fs.mkdtemp(path.join(backupRoot, `${skill}-${Date.now()}-`));
   const backupPath = path.join(container, 'original');
   await writeSnapshot(backupPath, original);
   await verifySnapshot(backupPath, original);
@@ -197,6 +199,7 @@ async function backupTarget(targetDir, backupRoot, original) {
 export async function installSkill({ sourceDir, targetDir, version, backupRoot, replace = false } = {}) {
   const { source, target, record, result } = await examine({ sourceDir, targetDir, version });
   targetDir = result.targetDir;
+  const skill = result.name;
   if (result.status === 'symlink') throw fail('SYMLINK', result.message);
   if (result.status === 'installed') return { status: 'installed', targetDir, version, message: '已安装此版本，无需重复写入。' };
   if (result.status !== 'new' && !replace) throw fail('REPLACE_REQUIRED', result.message);
@@ -218,14 +221,14 @@ export async function installSkill({ sourceDir, targetDir, version, backupRoot, 
   let preserveTransaction = false;
   try {
     const { merged, preserved, collisions } = mergePayload(source, target, record);
-    const metadata = Buffer.from(`${JSON.stringify({ schemaVersion: 1, skill: SKILL, version, installedAt: new Date().toISOString(), files: fileHashes(source) }, null, 2)}\n`);
+    const metadata = Buffer.from(`${JSON.stringify({ schemaVersion: 1, skill, version, installedAt: new Date().toISOString(), files: fileHashes(source) }, null, 2)}\n`);
     merged.set(RECORD, { type: 'file', mode: 0o600, data: metadata, hash: digest(metadata) });
-    stage = await fs.mkdtemp(path.join(parent, `.${SKILL}-stage-`));
+    stage = await fs.mkdtemp(path.join(parent, `.${skill}-stage-`));
     await writeSnapshot(stage, merged);
     await verifySnapshot(stage, merged);
-    if (target) backupPath = await backupTarget(targetDir, backupRoot, target);
+    if (target) backupPath = await backupTarget(targetDir, backupRoot, target, skill);
     if (fingerprint(await snapshot(targetDir)) !== fingerprint(target)) throw fail('TARGET_CHANGED', '目标在安装过程中发生变化，已停止替换；请重新检查。');
-    transaction = await fs.mkdtemp(path.join(parent, `.${SKILL}-transaction-`));
+    transaction = await fs.mkdtemp(path.join(parent, `.${skill}-transaction-`));
     if (target) { await fs.rename(targetDir, path.join(transaction, 'original')); oldMoved = true; }
     await fs.rename(stage, targetDir);
     stageMoved = true;
@@ -254,4 +257,39 @@ export async function installSkill({ sourceDir, targetDir, version, backupRoot, 
     if (transaction && !preserveTransaction) await fs.rm(transaction, { recursive: true, force: true });
     await fs.rmdir(lock);
   }
+}
+
+function bundleEntries(options) {
+  const sourceDir = absolute(options.sourceDir, '来源目录');
+  const targetDir = absolute(options.targetDir, '目标目录');
+  if (path.basename(targetDir) !== SKILL_NAMES[0]) throw fail('INVALID_TARGET', '安装包的主目标必须为 playbook-wright。');
+  return [
+    { ...options, sourceDir, targetDir },
+    { ...options, sourceDir: path.join(path.dirname(sourceDir), SKILL_NAMES[1]), targetDir: path.join(path.dirname(targetDir), SKILL_NAMES[1]) },
+  ];
+}
+
+export async function inspectSkillBundle(options) {
+  const targets = await Promise.all(bundleEntries(options).map(inspectSkill));
+  const status = ['symlink', 'conflict', 'modified', 'update', 'new', 'installed'].find(status => targets.some(target => target.status === status));
+  const relevant = targets.find(target => target.status === status);
+  return { ...targets[0], status, targets, fileCount: targets.reduce((count, target) => count + target.fileCount, 0),
+    message: status === 'installed' ? '主 Skill 与旧调用名兼容入口均已安装，文件校验一致。' : `${relevant.name}：${relevant.message}` };
+}
+
+export async function installSkillBundle(options) {
+  const preview = await inspectSkillBundle(options);
+  if (preview.status === 'symlink') throw fail('SYMLINK', preview.message);
+  if (!options.replace && preview.targets.some(target => !['new', 'installed'].includes(target.status))) throw fail('REPLACE_REQUIRED', preview.message);
+  const completed = [];
+  for (const entry of bundleEntries(options)) {
+    try { completed.push(await installSkill(entry)); }
+    catch (error) {
+      if (completed.length) error.message += ' 主入口已就绪，兼容入口未完成；请重新查看目标后重试。';
+      throw error;
+    }
+  }
+  return { status: 'installed', targetDir: completed[0].targetDir, version: options.version,
+    backups: completed.flatMap((result, index) => result.backupPath ? [{ name: SKILL_NAMES[index], targetDir: result.targetDir, path: result.backupPath }] : []),
+    message: '主 Skill 与旧调用名兼容入口均已安装并校验。' };
 }
