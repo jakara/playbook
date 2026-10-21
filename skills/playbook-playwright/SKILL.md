@@ -1,17 +1,23 @@
 ---
 name: playbook-playwright
-description: 在 Playwright 测试用例与 Playbook TypeScript 演示脚本之间转换，保留原生动作、断言、fixture 和数据边界，并生成对应关系与验证报告。用于 TC 转演示、演示转 TC 或维护两者共享流程。
+description: 为 Playbook 梳理演示需求，从自然语言、手工流程或 Playwright TC 生成脚本，管理脚本与演示编排，调整讲解和呈现效果，并进行 TC 双向转换与验证。配合用户自己的智能体使用。
 ---
 
-# Playbook ↔ Playwright
+# Playbook 创作与维护
 
-把一段业务流程用于演示与测试。Playbook 负责讲解和编排，Playwright 继续负责原生交互与断言。业务脚本留在业务仓库；不要把客户脚本、凭据或运行证据写入 Playbook 产品仓库。
+帮助用户把“希望怎样演示”变成可验证的 Playbook scripts。你所在的智能体负责创作、管理、讲解/效果调整、编排和测试转换；Playbook 客户端只读查看、搜索、播放与反馈。Playwright 继续负责原生交互与断言。业务脚本留在业务仓库；不要把客户脚本、凭据或运行证据写入 Playbook 产品仓库。
 
 ## 开始时
 
-读取目标 TC 或 `.playbook.ts`，沿实际 import 查阅 fixture、helpers、Playwright 配置、setup/teardown 与环境选择。不要只处理测试函数的正文。先确认用户要求的是共享流程还是可独立运行的导出；未指定时首选共享流程，避免两份业务逻辑漂移。
+先识别用户是在创作、维护/调整、转换还是修复，读取与本次目标有关的已有脚本、页面、测试及环境。不要假设必须先有 TC，也不要把用户已说清的要求变成固定访谈。
 
-读取 [契约](references/contract.md)，再按方向读取 [TC → Playbook](references/tc-to-playbook.md) 或 [Playbook → TC](references/playbook-to-tc.md)。已有项目契约与本 Skill 版本不一致时先识别差异，按项目实际 SDK 适配，不悄悄改写版本。
+读取 [契约](references/contract.md)，按实际工作只读取对应指引：
+
+- 从需求或手工操作生成脚本、需要补齐意图时，读 [需求引导与创作](references/authoring.md)。
+- 管理脚本、修改讲解/效果、编排或根据反馈修复时，读 [维护与呈现调整](references/maintenance.md)。
+- TC 转脚本时，读 [TC → Playbook](references/tc-to-playbook.md)；转回测试时，读 [Playbook → TC](references/playbook-to-tc.md)。共享模式为默认，用户要求脱离 Playbook 时才独立导出。
+
+已有项目契约与本 Skill 版本不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
 
 本 Skill 随附 v0.1 契约说明；`@playbook/core` 是参考 SDK 的本地包名，尚未承诺存在公开 npm 包。先检查目标仓库已有依赖与导出路径，不能凭名字自动安装未知包。
 
@@ -27,7 +33,9 @@ description: 在 Playwright 测试用例与 Playbook TypeScript 演示脚本之�
 
 ## 交付与验证
 
-交付目标脚本、适用的 TC/环境适配入口，以及按 [报告规范](references/conversion-report.md) 写出的对应关系和验证结果。能从原代码确认的内容自行确定，不要求用户重复提供。
+按任务交付目标脚本和适用的 TC/环境适配入口；涉及 TC 转换时，按 [报告规范](references/conversion-report.md) 记录对应关系和验证结果。能从原代码确认的内容自行确定，不要求用户重复提供。
+
+普通创作和小范围调整可直接在回复中说明需求、文件、实际验证与缺口，不强制另建 PRD 或转换报告。涉及 TC 转换时使用上述报告规范；按项目已有契约维护发现清单与演示引用，不虚构客户端尚未发布的加载格式或 API。
 
 至少进行项目已有的类型/语法检查。具备已授权的隔离环境时，运行原用例与转换后入口，对比关键结果；可行时用一次刻意失败的预期确认断言仍生效。未执行的浏览器、数据恢复或客户环境检查明确列出。
 

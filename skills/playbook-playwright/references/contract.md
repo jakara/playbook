@@ -47,7 +47,7 @@ export default definePlaybook<Context>({
 | requirements.dataMode | `real` 真实服务/身份边界；`fixture` 受控测试数据或合成页面；`mock` 接口或浏览器能力被替换。混合时报告具体构成，并采用限制更强的类别 |
 | requirements.effects | `read-only` 不修改业务对象；`writes` 会创建、发布、更新、删除等。认证与临时会话资源另说明 |
 | requirements.replay | `safe` 在正常 Profile/fixture 生命周期下可再次运行，无需因前一轮副作用还原持久业务状态；`reset-required` 必须恢复/重新准备持久业务状态，即使恢复已由 Profile 自动完成仍选此值；`single-run` 需要恢复但没有已验证方案。正常登录、导航和临时 HTML 页重建不单独算业务恢复 |
-| requirements.roles | 角色名，不保存账号密码；Profile 明确角色和身份绑定 |
+| requirements.roles | 实际执行所需的身份角色，不是观众类别；Profile 明确角色与身份绑定，不保存账号密码。无需登录的合成页面为 []，面向教师等观众写在讲解元数据 |
 | steps[].explain | 下一步用途、动作与预期效果，不介绍底层选择器 |
 | steps[].target | 可选的 `(context) => Locator`，只返回定位，不执行动作；无目标时用中央说明。原生 dialog/frame 等需要相应呈现支持 |
 | steps[].presentation | 可选 `chapter`、`side: top/right/bottom/left`、`holdMs`；只影响演示 |

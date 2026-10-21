@@ -1,4 +1,4 @@
 interface:
-  display_name: "Playbook 与 Playwright 双向转换"
-  short_description: "将测试与演示互转，保留原生动作、业务断言和环境依赖，并验证转换结果"
-  default_prompt: "使用 $playbook-playwright 转换指定测试或演示脚本，保留行为与数据边界并报告验证结果。"
+  display_name: "Playbook 脚本创作与维护"
+  short_description: "梳理演示需求、生成和维护脚本、调整讲解与效果，并保留测试复用能力"
+  default_prompt: "使用 $playbook-playwright 把我的演示需求整理为可验证脚本，或调整现有流程的讲解与呈现。"
