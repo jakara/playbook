@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.4.0，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.7.0。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-21。客户端 v0.4.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.7.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -206,9 +206,9 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 Book/Section/脚本详情经受限 IPC 请求导出。主进程先打开系统保存窗口，取消不启动任务；确认后沿用 play 调度、重播保护和静态快照，启动同一运行器，额外提供本轮缓存 exportDir。业务源码和录音不写回。
 
-运行器以 1440×810 视口执行实际 Chrome 流程。开场、章节和操作前提示保留当前呈现层；每次 run/verify 后隐藏引导层截取结果，独立打码层继续生效。讲解来源仍由 narrationSource 读取冻结录音或本地合成，Chrome OfflineAudioContext 解码并重采样为单声道 PCM WAV，无外部 ffmpeg/Node 服务要求。
+运行器以 1440×810 视口执行实际 Chrome 流程。开场和步骤在对应语音开始前截图，目标步骤为截图临时摆放光圈再恢复实际光标；开场、章节和操作前提示保留当前呈现层；每次 run/verify 后隐藏引导层截取结果，独立打码层继续生效。讲解来源仍由 narrationSource 读取冻结录音或本地合成，Chrome OfflineAudioContext 解码并重采样为单声道 PCM WAV，无外部 ffmpeg/Node 服务要求。
 
-`desktop/pptx.mjs` 使用 PptxGenJS 生成截图页和备注，使用 JSZip 添加标准 Open XML transition（advTm/advClick）和嵌入声音关系、stSnd/endSnd，以及放映 useTimings。音频在入页时播放一次，静音帧结束上一声音。每页时间取现有停留/移动参数与实际音频长度的较大值；不记录人工暂停、运行准备、网络等待和导出处理耗时。时间规则见 Skill 导出指引。
+`desktop/pptx.mjs` 使用 PptxGenJS 生成截图页和备注，使用 JSZip 添加标准 Open XML transition（advTm/advClick）和 audioFile/p14:media 嵌入关系、原生自动播放时间线，以及放映 useTimings。旁白在当前页播放一次并在放映时隐藏，采用独立媒体生命周期。读取完整 PCM WAV 计算音长；最终时间取基础时长、音长加 1 秒及最短阅读时间的最大值，并向上取整到整秒；章节/结果至少 2 秒，其余至少 3 秒。不记录人工暂停、运行准备、网络等待和导出处理耗时。时间规则见 Skill 导出指引。
 
 所有业务校验和 Profile release 成功后才在缓存构建 deck.pptx。主进程核对停止意图，在用户选择的文件夹内暂存，再一次替换目标；停止、失败不提交半成品。保存提交点同步写入完成状态，避免停止命令把已保存文件误记为未保存。运行记录保存输出路径、页数、内嵌音频页数和总时长，按 runId 打开/定位，renderer 不提供任意写入路径。音频生成、解码、截图、构建或保存失败均可见，不静默跳过。
 

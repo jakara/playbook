@@ -14,7 +14,7 @@ const appRoot = app.getAppPath();
 const starter = path.join(appRoot, 'examples/starter');
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-wright');
-const skillVersion = '0.7.0';
+const skillVersion = '0.7.1';
 const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;

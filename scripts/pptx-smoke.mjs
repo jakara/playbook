@@ -17,6 +17,8 @@ import {appendFile} from 'node:fs/promises';
 export default defineProfile({schemaVersion:1,id:'sample',title:'隔离样例',dataMode:'fixture',roles:[],async prepare({page,parameters}){
 await page.setContent('<!doctype html><html lang="zh-CN"><meta charset="UTF-8"><style>body{font:24px -apple-system,sans-serif;margin:0;color:#17382c;background:#eef3ec}header{padding:28px 70px;background:white;display:flex;justify-content:space-between}main{padding:50px 70px}button,input{font:inherit;padding:16px;margin:12px 0}section{padding:24px;background:white;border-radius:16px}#secret{background:#ffe0d0;padding:16px;color:#1b1818}</style><header><strong>Playbook 导出演示</strong><span>受控样例</span></header><main><h1>课程准备工作台</h1><p>截图、语音、讲解和实际操作按同一顺序完成。</p><section><button id="add">预览课程</button><p>已预览：<b id="count">0</b></p><label>搜索课程 <input id="query"></label><button id="search">搜索</button><p id="result">尚未搜索</p><div id="secret">PRIVATE-NEVER-IN-SCREENSHOT</div></section></main></html>');
 await page.evaluate(()=>{document.querySelector('#add').onclick=()=>{document.querySelector('#count').textContent=String(Number(document.querySelector('#count').textContent)+1)};document.querySelector('#search').onclick=()=>{document.querySelector('#result').textContent=document.querySelector('#query').value};});
+const screenshot=page.screenshot.bind(page);
+page.screenshot=async options=>{const voice=await page.evaluate(()=>window.playbookNarration?.inspect());if(options.path?.includes('/export/')){const opacity=await page.evaluate(()=>{const c=document.querySelector('#ygd-card');return c&&!c.hidden?Number(getComputedStyle(c).opacity):1;});if(opacity<.999)throw new Error('Guide frame was captured during fade-in');}if(options.path?.endsWith('/export/1.png')&&voice?.state!=='idle')throw new Error('Opening frame was captured after narration');if(options.path?.endsWith('/export/3.png')&&(await page.evaluate(()=>window.playbookGuide?.inspect().popoverVisible))&&voice?.kind!=='tts')throw new Error('Step frame was captured after its own narration');return screenshot(options);};
 return {context:{page,parameters},async release(){await appendFile(parameters.log,JSON.stringify({count:await page.locator('#count').textContent(),result:await page.locator('#result').textContent()})+'\\n');}};
 }});`;
 const common = `requirements:{dataMode:'fixture',effects:'read-only',replay:'safe',roles:[]},presentation:{openingMs:400,defaultHoldMs:500,cursorMoveMs:300},redactions:[{selector:'#secret',mode:'cover'}]`;
@@ -48,7 +50,7 @@ try {
   const state = () => call('getState');
   async function until(predicate, timeout = 45000) {
     const end = Date.now() + timeout;
-    while (Date.now() < end) { const value = await state(); if (predicate(value)) return value; await sleep(60); }
+    while (Date.now() < end) { const value = await state(); if (predicate(value)) return value; if(value.activeRun?.state==='failed')throw new Error(value.activeRun.error); await sleep(60); }
     throw new Error(`PPTX timeout: ${JSON.stringify((await state()).activeRun)}`);
   }
   const saveDialog = next => launched.evaluate(({ dialog }, result) => { dialog.showSaveDialog = async () => result; }, next);
@@ -82,18 +84,19 @@ try {
     const xml = await zip.file(`ppt/slides/slide${index}.xml`).async('string');
     const timing = Number(xml.match(/advTm="(\d+)"/)[1]); totalMs += timing; timings.push(timing);
     notes.push(await zip.file(`ppt/notesSlides/notesSlide${index}.xml`).async('string'));
-    if (/<p:stSnd/.test(xml)) {
+    assert.doesNotMatch(xml, /<p:stSnd|<a:videoFile/); assert.ok(timing >= 2000 && timing % 1000 === 0);
+    if (/<p:audio isNarration="1"/.test(xml)) {
       const wav = await zip.file(`ppt/media/playbook-${index}.wav`).async('nodebuffer');
       assert.equal(wav.toString('ascii', 0, 4), 'RIFF'); assert.equal(wav.readUInt16LE(20), 1); assert.equal(wav.readUInt16LE(34), 16);
       const duration = Math.ceil(wav.readUInt32LE(40) / wav.readUInt32LE(28) * 1000);
-      assert.ok(timing >= duration); assert.ok(wav.subarray(44).some(value => value !== 0)); audioSlides++;
+      assert.ok(timing >= duration + 1000); assert.ok(wav.subarray(44).some(value => value !== 0)); audioSlides++;
     }
   }
   assert.equal(audioSlides, 3); assert.equal(totalMs, success.exported.durationMs);
   assert.match(notes[0], /欢迎体验。/); assert.match(notes[2], /先查看课程。/); assert.match(notes[4], /查找课程。/);
-  assert.match(notes[6], /第二段：独立流程/); assert.equal(timings[3], 600); assert.equal(timings[5], 750);
-  assert.equal(timings[2], Math.max(1050, Math.ceil((await zip.file('ppt/media/playbook-3.wav').async('nodebuffer')).readUInt32LE(40) / 44100 * 1000)));
-  checks.notesActualAudioAndNominalTimings = true;
+  assert.match(notes[6], /第二段：独立流程/); assert.equal(timings[3], 2000); assert.equal(timings[5], 2000);
+  assert.equal(timings[2], Math.ceil(Math.max(3000, (await zip.file('ppt/media/playbook-3.wav').async('nodebuffer')).readUInt32LE(40) / 44100 * 1000 + 1000) / 1000) * 1000);
+  checks.notesActualAudioAndSafeTimings = true; checks.framesCapturedBeforeTheirNarration = true;
   const scenesDir = path.join(userData, 'cache', success.id, 'export');
   for (const index of [1, 3, 4, 5, 6, 8, 9]) await writeFile(path.join(output, `scene-${index}.png`), await readFile(path.join(scenesDir, `${index}.png`)));
   const released = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));

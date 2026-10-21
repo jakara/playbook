@@ -1,6 +1,6 @@
 # 当前桌面契约：schemaVersion 1
 
-适用于客户端 v0.4、内置 Skill 0.7.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`schemaVersion` 仍为 `1`，旧脚本向后兼容。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
+适用于客户端 v0.4、内置 Skill 0.7.1。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`schemaVersion` 仍为 `1`，旧脚本向后兼容。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
 
 完整能力入口见 [可用功能与选择方式](capabilities.md)，不要把客户端能力写成脚本字段。
 

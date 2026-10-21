@@ -1,6 +1,6 @@
 # Playbook 产品方案
 
-日期：2026-10-21。本文为 v0.4.0 功能与边界说明，随包 Skill 为 0.7.0；具体通过项、版本和证据见 [verification.md](verification.md)，文档中的功能描述不替代运行验收。
+日期：2026-10-21。本文为 v0.4.1 功能与边界说明，随包 Skill 为 0.7.1；具体通过项、版本和证据见 [verification.md](verification.md)，文档中的功能描述不替代运行验收。
 
 ## 产品定位
 

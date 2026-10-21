@@ -43,11 +43,29 @@ export async function capturePptxScene({ page, dir, index, title, notes, duratio
     if (!root) return null;
     const previous = root.style.visibility; root.style.visibility = 'hidden'; return previous;
   }) : null;
+  const still = await page.addStyleTag({ content: '#ygd-root #ygd-card{animation:none!important;opacity:1!important;translate:0 0!important}#ygd-root .ygd-popover{animation:none!important;transition:none!important;opacity:1!important}' });
   try { await page.screenshot({ path: image, animations: 'disabled' }); }
   finally {
+    await still.evaluate(element => element.remove()).catch(() => {});
     if (clean && previous !== null && !page.isClosed()) await page.evaluate(value => { const root = document.getElementById('ygd-root'); if (root) root.style.visibility = value; }, previous);
   }
   return { image, audio, title, notes, durationMs: Math.max(1, Math.ceil(durationMs), voice?.durationMs || 0), audioMs: voice?.durationMs || 0 };
+}
+
+function narrationTiming(shapeId, durationMs) {
+  // Automatic, current-slide media playback, matching the native WPS/PowerPoint timeline.
+  return `<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>
+    <p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>
+      <p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond></p:stCondLst><p:childTnLst>
+        <p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>
+          <p:par><p:cTn id="5" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="afterEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>
+            <p:cmd type="call" cmd="playFrom(0.0)"><p:cBhvr additive="base"><p:cTn id="6" dur="${durationMs}" fill="hold"/><p:tgtEl><p:spTgt spid="${shapeId}"/></p:tgtEl></p:cBhvr></p:cmd>
+          </p:childTnLst></p:cTn></p:par>
+        </p:childTnLst></p:cTn></p:par>
+      </p:childTnLst></p:cTn></p:par>
+    </p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst><p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>
+    <p:audio isNarration="1"><p:cMediaNode vol="100000" showWhenStopped="0"><p:cTn id="7" fill="hold" display="1"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:endCondLst><p:cond evt="onStopAudio"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:endCondLst></p:cTn><p:tgtEl><p:spTgt spid="${shapeId}"/></p:tgtEl></p:cMediaNode></p:audio>
+  </p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
 }
 
 export async function writePptx({ scenes, title, output, checkpoint = async () => {} }) {
@@ -68,22 +86,35 @@ export async function writePptx({ scenes, title, output, checkpoint = async () =
     slide.addNotes(scene.notes || scene.title);
   }
   const zip = await JSZip.loadAsync(await deck.write({ outputType: 'nodebuffer' }));
+  const durations = [];
   for (const [index, scene] of scenes.entries()) {
     await checkpoint();
     const name = `ppt/slides/slide${index + 1}.xml`;
-    let sound = '<p:endSnd/>';
+    let xml = await zip.file(name).async('string'), audioMs = 0, timing = '';
     if (scene.audio) {
       const rels = `ppt/slides/_rels/slide${index + 1}.xml.rels`;
       const audioName = `playbook-${index + 1}.wav`;
-      zip.file(`ppt/media/${audioName}`, await readFile(scene.audio));
-      const xml = await zip.file(rels).async('string');
-      zip.file(rels, xml.replace('</Relationships>', `<Relationship Id="rIdPlaybookAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/${audioName}"/></Relationships>`));
-      sound = `<p:stSnd loop="0"><p:snd r:embed="rIdPlaybookAudio" name="Playbook ${index + 1}"/></p:stSnd>`;
+      const wave = await readFile(scene.audio);
+      // capturePptxScene owns this fixed PCM format; reject mismatches before publishing.
+      if (wave.length <= 44 || wave.length % 2 || wave.toString('ascii', 0, 4) !== 'RIFF' || wave.toString('ascii', 8, 16) !== 'WAVEfmt ' || wave.readUInt16LE(20) !== 1 || wave.readUInt16LE(22) !== 1 || wave.readUInt16LE(34) !== 16 || wave.readUInt32LE(24) !== 22050 || wave.readUInt32LE(28) !== 44100 || wave.toString('ascii', 36, 40) !== 'data' || wave.readUInt32LE(40) !== wave.length - 44) throw new Error('PPTX 内嵌旁白不是完整的 PCM WAV');
+      audioMs = Math.ceil((wave.length - 44) / 44100 * 1000);
+      zip.file(`ppt/media/${audioName}`, wave);
+      const relationships = await zip.file(rels).async('string');
+      zip.file(rels, relationships.replace('</Relationships>', `<Relationship Id="rIdPlaybookAudio" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" Target="../media/${audioName}"/><Relationship Id="rIdPlaybookMedia" Type="http://schemas.microsoft.com/office/2007/relationships/media" Target="../media/${audioName}"/></Relationships>`));
+      const shapeId = Math.max(...[...xml.matchAll(/<p:cNvPr id="(\d+)"/g)].map(match => Number(match[1]))) + 1;
+      const poster = xml.match(/<a:blip r:embed="([^"]+)"/)[1];
+      // An audioFile (not videoFile or transition sound) gives each page its own playback lifecycle.
+      const media = `<p:pic><p:nvPicPr><p:cNvPr id="${shapeId}" name="Playbook narration"><a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr><p:cNvPicPr/><p:nvPr><a:audioFile r:link="rIdPlaybookAudio"/><p:extLst><p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}"><p14:media xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" r:embed="rIdPlaybookMedia"/></p:ext></p:extLst></p:nvPr></p:nvPicPr><p:blipFill><a:blip r:embed="${poster}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="-914400" y="-914400"/><a:ext cx="91440" cy="91440"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+      xml = xml.replace('</p:spTree>', `${media}</p:spTree>`);
+      timing = narrationTiming(shapeId, audioMs);
     }
-    // ISO 29500 slide transition sound starts on entry without a click/animation.
-    // Explicit endSnd on silent frames prevents a previous clip leaking across slides.
-    const xml = await zip.file(name).async('string');
-    zip.file(name, xml.replace('</p:clrMapOvr>', `</p:clrMapOvr><p:transition advClick="0" advTm="${scene.durationMs}"><p:cut/><p:sndAc>${sound}</p:sndAc></p:transition>`));
+    // Whole-second, upward rounding avoids truncation in compatible viewers; leave startup/tail room.
+    const minimum = ['chapter', 'result'].includes(scene.kind) ? 2000 : 3000;
+    const durationMs = Math.ceil(Math.max(minimum, scene.durationMs, audioMs ? audioMs + 1000 : 0) / 1000) * 1000;
+    if (durationMs > 4294967295) throw new Error('PPTX 换页时间无效');
+    durations.push(durationMs);
+    xml = xml.replace('</p:clrMapOvr>', `</p:clrMapOvr><p:transition advClick="0" advTm="${durationMs}"><p:cut/></p:transition>`);
+    zip.file(name, xml.replace('</p:sld>', `${timing}</p:sld>`));
   }
   const types = await zip.file('[Content_Types].xml').async('string');
   if (!/Extension="wav"/.test(types)) zip.file('[Content_Types].xml', types.replace('</Types>', '<Default Extension="wav" ContentType="audio/wav"/></Types>'));
@@ -91,7 +122,7 @@ export async function writePptx({ scenes, title, output, checkpoint = async () =
   zip.file('ppt/presProps.xml', properties.replace('/>', '><p:showPr loop="0" showNarration="1" useTimings="1"><p:present/><p:sldAll/></p:showPr></p:presentationPr>'));
   const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   await checkpoint(); await writeFile(output, bytes, { mode: 0o600 }); await checkpoint();
-  return { slides: scenes.length, durationMs: scenes.reduce((sum, scene) => sum + scene.durationMs, 0), audioSlides: scenes.filter(scene => scene.audio).length };
+  return { slides: scenes.length, durationMs: durations.reduce((sum, value) => sum + value, 0), audioSlides: scenes.filter(scene => scene.audio).length };
 }
 
 // Stage beside the chosen destination, then replace in one synchronous commit.

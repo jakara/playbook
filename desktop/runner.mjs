@@ -16,10 +16,10 @@ let narrationAbort;
 let packaging = false, scenes = [];
 const visualChecks = [];
 
-async function slide(title, notes, durationMs, source, clean = false) {
+async function slide(kind, title, notes, durationMs, source) {
   if (!config.exportDir) return;
   await checkpoint();
-  scenes.push(await capturePptxScene({ page, dir: config.exportDir, index: scenes.length + 1, title, notes, durationMs, source, clean }));
+  scenes.push({ ...await capturePptxScene({ page, dir: config.exportDir, index: scenes.length + 1, title, notes, durationMs, source, clean: kind === 'result' }), kind });
   await checkpoint();
 }
 const transcript = (clip, fallback) => clip && typeof clip.text === 'string' ? clip.text : fallback;
@@ -141,10 +141,10 @@ async function run(input) {
       const openingSource = await voiceSource(flow, flow.narration?.opening, `${flow.title}。${flow.summary}`);
       await ui('configure', settings);
       await ui('center', { eyebrow: `${segment.sectionTitle ? segment.sectionTitle + ' · ' : ''}${config.dataMode === 'real' ? '实际服务' : config.dataMode === 'mock' ? '模拟接口' : '受控样例'} · Playbook`, title: flow.title, description: flow.summary, phase: 'playing' });
+      await slide('opening', flow.title, transcript(flow.narration?.opening, `${flow.title}。${flow.summary}`), settings.openingMs, openingSource);
       const openingVoice = startVoice(openingSource);
       await capture(`opening-${flow.id}`);
       current = { ...segment, total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs); await openingVoice(); await checkpoint();
-      await slide(flow.title, transcript(flow.narration?.opening, `${flow.title}。${flow.summary}`), settings.openingMs, openingSource);
       let chapter;
       for (const step of flow.steps) {
         await checkpoint(); current = { ...segment, total, completed, index: completed + 1, stepId: step.id, stepTitle: step.title }; await state();
@@ -152,7 +152,7 @@ async function run(input) {
         if (step.presentation?.chapter && step.presentation.chapter !== chapter) {
           chapter = step.presentation.chapter;
           await ui('center', { eyebrow: '接下来演示', title: chapter, description: step.title, phase: 'playing' });
-          await slide(chapter, `${chapter}。${step.title}`, Math.min(1800, settings.openingMs));
+          await slide('chapter', chapter, `${chapter}。${step.title}`, Math.min(1800, settings.openingMs));
           await wait(Math.min(1800, settings.openingMs));
         }
         const target = step.target?.(prepared.context);
@@ -163,6 +163,13 @@ async function run(input) {
           await target.waitFor({ state: 'visible' });
           await target.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
           await target.evaluate((element, details) => window.playbookGuide.highlight(element, details), { title: step.title, description: step.explain, side: step.presentation?.side, index: completed + 1, total });
+          if (config.exportDir) {
+            const box = await target.boundingBox();
+            if (!box) throw new Error('导出目标已不可见');
+            await ui('place', { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+            try { await slide('step', step.title, transcript(step.narration, step.explain), (step.presentation?.holdMs ?? settings.defaultHoldMs) + settings.cursorMoveMs + 250, source); }
+            finally { await ui('place', position); }
+          }
           spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
           await moveTo(target, settings.cursorMoveMs);
@@ -170,17 +177,17 @@ async function run(input) {
           await ui('clickEffect'); await wait(250);
         } else {
           await ui('center', { eyebrow: '流程说明', title: step.title, description: step.explain, phase: 'playing' });
+          await slide('step', step.title, transcript(step.narration, step.explain), step.presentation?.holdMs ?? settings.defaultHoldMs, source);
           spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
         }
         await spoken(); await checkpoint();
-        await slide(step.title, transcript(step.narration, step.explain), (step.presentation?.holdMs ?? settings.defaultHoldMs) + (target ? settings.cursorMoveMs + 250 : 0), source);
         await ui('detach');
         inOperation = true;
         try { await step.run(prepared.context); await step.verify(prepared.context); }
         finally { inOperation = false; }
         completed++; current.completed = completed; await state(); await checkpoint();
-        await slide(`${step.title} · 操作结果`, '', step.presentation?.afterMs ?? 550, null, true);
+        await slide('result', `${step.title} · 操作结果`, '', step.presentation?.afterMs ?? 550);
         await wait(step.presentation?.afterMs ?? 550);
       }
       if (release) { const cleanup = release; release = null; await cleanup(); }
@@ -190,7 +197,7 @@ async function run(input) {
     await capture('complete');
     let exported;
     if (config.exportDir) {
-      await slide('演示完成', '核心流程已演示完成，每个步骤均已通过实际结果检查。', 1800);
+      await slide('closing', '演示完成', '核心流程已演示完成，每个步骤均已通过实际结果检查。', 1800);
       packaging = true; current.stepTitle = '正在生成 PPTX…'; await state();
       exported = await writePptx({ scenes, title: config.title, output: path.join(config.exportDir, 'deck.pptx'), checkpoint });
     }
