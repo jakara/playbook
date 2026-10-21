@@ -1,0 +1,22 @@
+{
+  "name": "@playbook/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Playbook script contract and reference executor; Electron application is planned",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check:examples": "tsc -p tsconfig.examples.json",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test:examples": "playwright test -c examples/playwright.config.ts",
+    "test:negative": "node tests/negative-check.mjs",
+    "check": "npm run build && npm run check:examples && npm run test:unit && npm run test:examples && npm run test:negative"
+  },
+  "peerDependencies": { "@playwright/test": "1.58.2" },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "@types/node": "24.0.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+artifacts/
+test-results/
+playwright-report/
+*.local.json
+*.local.ts
+*.log
+.DS_Store

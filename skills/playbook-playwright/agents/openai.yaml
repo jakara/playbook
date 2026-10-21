@@ -1,0 +1,4 @@
+interface:
+  display_name: "Playbook 与 Playwright 双向转换"
+  short_description: "将测试与演示互转，保留原生动作、业务断言和环境依赖，并验证转换结果"
+  default_prompt: "使用 $playbook-playwright 转换指定测试或演示脚本，保留行为与数据边界并报告验证结果。"
