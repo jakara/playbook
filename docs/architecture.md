@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.3.0，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.5.0。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-21。客户端 v0.3.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.5.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 

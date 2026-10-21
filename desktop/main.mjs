@@ -13,7 +13,7 @@ const appRoot = app.getAppPath();
 const starter = path.join(appRoot, 'examples/starter');
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-playwright');
-const skillVersion = '0.5.0';
+const skillVersion = '0.5.1';
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;
 let playbackControl, playbackSelection, controlIntent;

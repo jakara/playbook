@@ -1,10 +1,12 @@
 # 当前桌面契约：schemaVersion 1
 
-适用于客户端 v0.3、内置 Skill 0.5.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`schemaVersion` 仍为 `1`，旧脚本向后兼容。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
+适用于客户端 v0.3、内置 Skill 0.5.1。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`schemaVersion` 仍为 `1`，旧脚本向后兼容。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
+
+完整能力入口见 [可用功能与选择方式](capabilities.md)，不要把客户端能力写成脚本字段。
 
 ## 工作区与清单
 
-桌面添加的是含 `.playbook.json` 的业务目录，界面称为“项目”；文档/API 中的 workspace 指同一目录，不是另一层资料库。项目内层级是 Book → Section → 可执行脚本。资产路径为项目目录内的相对路径。以下清单、脚本和 Profile 相互对应；演示对象是合成页面，不假设业务系统有同名控件。
+桌面添加的是含 `.playbook.json` 的业务目录，界面称为“项目”；文档/API 中的 workspace 指同一目录，不是另一层资料库。清单内层级是 Book → Section → 可执行脚本；左侧仅“项目文件夹 → Book”两层树。进入时展示 Book 列表，选中后左栏收窄，右侧通过 Section Tab 平铺脚本并查看步骤；不是 Section/脚本嵌套树。资产路径为项目目录内的相对路径。以下清单、脚本和 Profile 相互对应；演示对象是合成页面，不假设业务系统有同名控件。
 
 ```json
 {
@@ -26,6 +28,12 @@ Book 的“播放全部”依次展开 `sections` 数组，再依次展开每个
 旧清单 `demos: [{ id, title, summary?, scripts, profile? }]` 仍可读取，客户端将它归一为 Book 和单个 Section，不改写用户清单。新建或调整编排使用 `books`，保留原有稳定引用；不要同时复制为两份业务流程。
 
 Profile 和流程 ID 各自唯一，步骤 ID 在各流程内唯一。parameters 为明文可序列化配置，不是密码库；凭据读取既有私有文件或已授权环境。
+
+## SDK 与测试环境解析
+
+当前本地 `@playbook/core` 只有 ESM `import` 与 types 导出，没有 CommonJS `require` 入口。类型检查成功不代表实际测试能加载 SDK。先核对业务项目的 package.json、TypeScript/Playwright 配置与真实解析路径；新建隔离样例可显式使用 `package.json` 的 `"type": "module"` 和匹配的 ESM 配置。若现有业务仓库是 CommonJS，不擅自切换整个仓库模块制式或虚构已存在的适配器，使用已验证的局部入口，或明确列为尚需适配的依赖。
+
+出现 `No "exports" main defined` 时先区分 require/import 和路径解析问题，不修改业务动作或放宽断言。共享 TC、独立 TC 与桌面打包各自核对依赖；桌面能编译不代表测试工程已配置完成。
 
 ## 原生脚本与静态元数据
 
@@ -83,7 +91,7 @@ export default defineProfile<Context>({
 
 完整签名为 `prepare({ page, workspaceDir, parameters }) => Promise<{ context: C; release?: () => Promise<void> }>`，C 至少包含运行器传入的当前 page。workspaceDir 是已添加工作区的绝对路径；用 `path.resolve(workspaceDir, 'config.local.json')` 读取既有配置，不依赖进程 cwd 或个人机器路径。上例合成页面不需要磁盘配置，因此只使用 page 和 parameters。
 
-运行器创建 Chrome、BrowserContext 和 page。Profile 负责业务登录、身份绑定、数据及自身 hooks，不关闭运行器的浏览器/会话。运行器在正常结束或失败后调用已经返回的 release；prepare 失败时还未返回 release，Profile 必须自行清理已创建的资源和 hooks。仅移除自己注册的 route/listener。
+运行器使用本机 Google Chrome 的独立受控会话，不连接日常 Chrome。一次批量播放共享 BrowserContext，每个脚本新建 page 并重新 prepare/release；不能将独立 page/context 对象理解为 cookie 或会话完全隔离。Profile 负责业务登录、身份绑定、数据及自身 hooks，不关闭运行器的浏览器/会话。运行器在正常结束或失败后调用已经返回的 release；prepare 失败时还未返回 release，Profile 必须自行清理已创建的资源和 hooks。仅移除自己注册的 route/listener。
 
 roles 必须由实际认证与授权上下文支撑；运行器只核对声明包含关系，不代替服务端授权。`resetBeforeRun: true` 仅用于 prepare 确实执行并验证了恢复的环境；声明不会自动恢复数据。
 
@@ -140,9 +148,9 @@ read-only/replay 声明不是拦截器或代码沙箱。依据真实业务实现
 
 ## 客户端控制与页面呈现
 
-浏览器注入负责开场、章节、箭头提示、蒙层、光圈与演示光标。进度条和播放控制由 Electron 原生透明置顶悬浮窗提供，不注入业务 DOM。它约 3 秒无输入后隐藏，在鼠标或键盘活动后显现；客户端使用系统空闲时间和鼠标坐标判断活动，不读取按键内容。
+浏览器注入负责开场、章节、箭头提示、蒙层、光圈与演示光标。进度条和播放控制由 Electron 原生透明置顶悬浮窗提供，不注入业务 DOM。它约 3 秒无输入后隐藏，在鼠标或键盘活动后显现；客户端使用系统空闲时间和鼠标坐标判断活动，不读取按键内容。播放栏文字/空白区域可拖动，“−”收成小条、“↗”展开，位置与收起状态保留于本次应用会话。
 
-默认系统快捷键 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）切换播放/暂停；空闲时播放主界面当前选择，终态允许从头重播，仍遵守原重播策略。注册冲突会提示，不承诺快捷键始终可用或所有系统已经验收。不要把这套全局控制写进脚本、监听业务页面键盘，或为单个脚本新增悬浮条配置字段。
+默认系统快捷键 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）切换播放/暂停；空闲时播放主界面当前选择，终态允许从头重播，仍遵守原重播策略。继续时先恢复最小化的受控 Chrome，并请求本轮页面置前；较新的暂停/停止覆盖尚未完成的继续请求。注册冲突会提示，不承诺快捷键始终可用或所有系统已经验收。不要把这套全局控制写进脚本、监听业务页面键盘，或为单个脚本新增悬浮条配置字段。
 
 ## TC 复用与独立导出
 

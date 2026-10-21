@@ -55,7 +55,7 @@ npm run package:mac
 
 ## 接入自己的项目
 
-让自己的智能体使用 [Playbook Skill](skills/playbook-playwright/SKILL.md)，按当前 [契约](skills/playbook-playwright/references/contract.md) 维护工作区。参考布局：
+让自己的智能体使用 [Playbook Skill](skills/playbook-playwright/SKILL.md)，先从 [完整能力索引](skills/playbook-playwright/references/capabilities.md) 了解功能，按当前 [契约](skills/playbook-playwright/references/contract.md) 维护工作区。参考布局：
 
 ```text
 business-project/

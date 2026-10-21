@@ -2,6 +2,8 @@
 
 ## 共享模式（默认）
 
+先按 [SDK 与测试环境解析](contract.md#sdk-与测试环境解析) 核对本地 SDK 的 ESM 运行入口；不能把 types 可解析当作测试已能运行。
+
 沿用业务已有的 `test` fixture、项目和配置，准备与脚本类型相匹配的 context，然后调用 `runPlaybook`，用 `test.step` 包裹每一步。不调用演示 beforeStep，不加载 Driver.js，不等待阅读停留、光标动画或语音，不应用打码。runPlaybook 忽略柔边光圈、redactions 与 narration 等纯呈现字段。
 
 从 `.playbook.json` 的 Profile 引用与现有 tests 确认真实 setup/teardown。defineProfile 的 prepare(page/workspaceDir/parameters) 是演示适配，不自动成为测试 fixture；若复用其业务 helpers，保留真实配置、登录与释放语义。只有步骤而无已知测试环境入口时，交付适配代码与明确依赖；依赖未实现前不能标为可执行 TC。
