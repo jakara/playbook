@@ -275,7 +275,8 @@ function SkillPage({ api, data, onRefresh, notify }) {
   const frameworks = data.skill?.frameworks || [];
   const [framework, setFramework] = useState(frameworks[0]?.id || '');
   const [scope, setScope] = useState('user');
-  const [workspaceId, setWorkspaceId] = useState(data.workspaces[0]?.id || '');
+  const [projectRoot, setProjectRoot] = useState('');
+  const [choosing, setChoosing] = useState(false);
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -283,25 +284,31 @@ function SkillPage({ api, data, onRefresh, notify }) {
   const [replace, setReplace] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const serial = useRef(0);
-  const params = { framework, scope, ...(scope === 'project' ? { workspaceId } : {}) };
-  const canPreview = !!framework && (scope === 'user' || !!workspaceId);
+  const params = { framework, scope, ...(scope === 'project' ? { projectRoot } : {}) };
+  const paramsKey = JSON.stringify(params);
+  const canPreview = !!framework && (scope === 'user' || !!projectRoot);
   const needsReplace = ['modified', 'conflict'].includes(preview?.status);
-  const blocked = !preview || ['installed', 'symlink'].includes(preview.status) || (needsReplace && !replace);
+  const blocked = !preview || preview.paramsKey !== paramsKey || ['installed', 'symlink'].includes(preview.status) || (needsReplace && !replace);
 
   useEffect(() => { if (!framework && frameworks.length) setFramework(frameworks[0].id); }, [frameworks.length]);
-  useEffect(() => { if (!data.workspaces.some(item => item.id === workspaceId)) setWorkspaceId(data.workspaces[0]?.id || ''); }, [data.workspaces, workspaceId]);
-  useEffect(() => { refreshPreview(); }, [framework, scope, workspaceId]);
+  useEffect(() => { setReceipt(null); refreshPreview(); }, [framework, scope, projectRoot]);
+  async function chooseProject() {
+    setChoosing(true); setError('');
+    try { const selected = await api.chooseSkillProject(); if (selected) setProjectRoot(selected); }
+    catch (error) { setError(error?.message || String(error)); }
+    finally { setChoosing(false); }
+  }
   async function refreshPreview() {
     const token = ++serial.current;
     setPreview(null); setError(''); setReplace(false);
     if (!canPreview) { setLoading(false); return; }
     setLoading(true);
-    try { const result = await api.skillPreview(params); if (token === serial.current) setPreview(result); }
+    try { const result = await api.skillPreview(params); if (token === serial.current) setPreview({ ...result, paramsKey }); }
     catch (error) { if (token === serial.current) setError(error?.message || String(error)); }
     finally { if (token === serial.current) setLoading(false); }
   }
   async function install() {
-    if (blocked || loading || installing) return;
+    if (blocked || loading || installing || choosing) return;
     setInstalling(true); setError('');
     try {
       const result = await api.skillInstall({ ...params, replace: preview.status === 'update' || (needsReplace && replace) });
@@ -312,8 +319,8 @@ function SkillPage({ api, data, onRefresh, notify }) {
   }
   const actionLabel = preview?.status === 'installed' ? '已安装当前版本' : preview?.status === 'update' ? '备份并更新 Skill' : needsReplace ? '备份并替换 Skill' : '安装 Skill';
   return <div className="skill-page"><div className="skill-main"><section className="skill-intro"><div className="skill-art"><Icon name="skill" size={30} /></div><div><span className="eyebrow">给你的智能体</span><h2>Playbook 创作 Skill</h2><p>由智能体编写和维护操作脚本，Playbook 负责查看、播放和反馈。</p></div></section>
-    <section className="install-form"><div className="section-label"><h3>选择安装位置</h3><span>安装前请核对目标目录</span></div><div className="form-row"><label htmlFor="skill-framework">使用的框架</label><select id="skill-framework" value={framework} onChange={event => setFramework(event.target.value)} disabled={installing}>{frameworks.length ? frameworks.map(item => <option key={item.id} value={item.id}>{item.name}</option>) : <option value="">暂无可用框架</option>}</select></div><fieldset className="scope-field"><legend>作用范围</legend><div className="scope-options"><label className={scope === 'user' ? 'chosen' : ''}><input type="radio" name="skill-scope" value="user" checked={scope === 'user'} disabled={installing} onChange={() => setScope('user')} /><span><strong>个人</strong><small>用于这个框架的所有项目</small></span></label><label className={scope === 'project' ? 'chosen' : ''}><input type="radio" name="skill-scope" value="project" checked={scope === 'project'} disabled={installing} onChange={() => setScope('project')} /><span><strong>指定项目</strong><small>只用于选定的项目</small></span></label></div></fieldset>{scope === 'project' && <div className="form-row"><label htmlFor="skill-project">项目</label><select id="skill-project" value={workspaceId} onChange={event => setWorkspaceId(event.target.value)} disabled={installing}>{data.workspaces.length ? data.workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>) : <option value="">请先添加项目</option>}</select></div>}
-    <div className="preview-heading"><h4>安装目标</h4><button className="text-button" onClick={refreshPreview} disabled={!canPreview || loading || installing}><Icon name="refresh" size={14} />{loading ? '正在查看…' : '重新查看目标'}</button></div><div className={`install-preview ${error ? 'has-error' : ''}`} aria-live="polite">{loading ? <div className="preview-loading"><span className="spinner" />正在检查目标位置…</div> : preview ? <><div className="preview-status"><span className={`preview-badge ${preview.status}`}>{PREVIEW_LABELS[preview.status] || preview.status}</span><span>{preview.fileCount != null ? `${preview.fileCount} 个文件` : ''}</span></div><p className="target-path">{preview.targetDir}</p><dl><div><dt>随包版本</dt><dd>{preview.version || data.skill?.version || '—'}</dd></div><div><dt>已安装版本</dt><dd>{preview.installedVersion || '尚未安装'}</dd></div></dl>{preview.message && <p className="preview-message">{preview.message}</p>}</> : <p className="muted">{canPreview ? '安装目标暂不可用。' : scope === 'project' ? '先选择一个项目以查看安装位置。' : '请选择使用的框架。'}</p>}</div>
-    {error && <div className="install-error" role="alert"><Icon name="info" size={17} />{error}</div>}{needsReplace && <label className="replace-check"><input type="checkbox" checked={replace} disabled={installing} onChange={event => setReplace(event.target.checked)} /><span>先备份再替换已有内容<small>原内容将保留备份，确认后再安装随包 Skill。</small></span></label>}{preview?.status === 'update' && <p className="backup-hint"><Icon name="shield" size={15} />更新前会备份现有 Skill。</p>}{preview?.status === 'symlink' && <p className="field-error">目标是符号链接，无法在此处安装。请调整安装位置后重试。</p>}{receipt && <div className="install-preview"><strong>文件已安装，智能体加载状态待验证</strong><p className="preview-message">在智能体中重新加载或开启新会话，调用 $playbook-playwright。</p>{receipt.backupPath && <><small>原内容备份位置</small><p className="target-path">{receipt.backupPath}</p></>}</div>}<div className="install-actions"><Button icon={installing ? 'clock' : preview?.status === 'installed' ? 'check' : 'skill'} className="primary" onClick={install} disabled={blocked || loading || installing}>{installing ? '正在安装…' : actionLabel}</Button><span>只有点击安装后才会写入目标目录。</span></div></section></div>
+    <section className="install-form"><div className="section-label"><h3>选择安装位置</h3><span>安装前请核对目标目录</span></div><div className="form-row"><label htmlFor="skill-framework">使用的框架</label><select id="skill-framework" value={framework} onChange={event => setFramework(event.target.value)} disabled={installing || choosing}>{frameworks.length ? frameworks.map(item => <option key={item.id} value={item.id}>{item.name}</option>) : <option value="">暂无可用框架</option>}</select></div><fieldset className="scope-field"><legend>作用范围</legend><div className="scope-options"><label className={scope === 'user' ? 'chosen' : ''}><input type="radio" name="skill-scope" value="user" checked={scope === 'user'} disabled={installing || choosing} onChange={() => setScope('user')} /><span><strong>个人</strong><small>用于这个框架的所有项目</small></span></label><label className={scope === 'project' ? 'chosen' : ''}><input type="radio" name="skill-scope" value="project" checked={scope === 'project'} disabled={installing || choosing} onChange={() => setScope('project')} /><span><strong>指定项目</strong><small>只用于选定的项目</small></span></label></div></fieldset>{scope === 'project' && <div className="form-row"><label htmlFor="skill-project">项目文件夹</label><div className="project-picker"><input id="skill-project" value={projectRoot} readOnly placeholder="请选择智能体使用的项目文件夹" /><Button icon="folder" onClick={chooseProject} disabled={installing || choosing}>{choosing ? '正在选择…' : projectRoot ? '更换文件夹' : '选择文件夹'}</Button></div><p className="form-hint">请选择智能体打开的项目文件夹；不必先添加到 Playbook，也不需要已有 Book。</p></div>}
+    <div className="preview-heading"><h4>安装目标</h4><button className="text-button" onClick={refreshPreview} disabled={!canPreview || loading || installing || choosing}><Icon name="refresh" size={14} />{loading ? '正在查看…' : '重新查看目标'}</button></div><div className={`install-preview ${error ? 'has-error' : ''}`} aria-live="polite">{loading ? <div className="preview-loading"><span className="spinner" />正在检查目标位置…</div> : preview ? <><div className="preview-status"><span className={`preview-badge ${preview.status}`}>{PREVIEW_LABELS[preview.status] || preview.status}</span><span>{preview.fileCount != null ? `${preview.fileCount} 个文件` : ''}</span></div><p className="target-path">{preview.targetDir}</p><dl><div><dt>随包版本</dt><dd>{preview.version || data.skill?.version || '—'}</dd></div><div><dt>已安装版本</dt><dd>{preview.installedVersion || '尚未安装'}</dd></div></dl>{preview.message && <p className="preview-message">{preview.message}</p>}</> : <p className="muted">{canPreview ? '安装目标暂不可用。' : scope === 'project' ? '先选择项目文件夹以查看安装位置。' : '请选择使用的框架。'}</p>}</div>
+    {error && <div className="install-error" role="alert"><Icon name="info" size={17} />{error}</div>}{needsReplace && <label className="replace-check"><input type="checkbox" checked={replace} disabled={installing || choosing} onChange={event => setReplace(event.target.checked)} /><span>先备份再替换已有内容<small>原内容将保留备份，确认后再安装随包 Skill。</small></span></label>}{preview?.status === 'update' && <p className="backup-hint"><Icon name="shield" size={15} />更新前会备份现有 Skill。</p>}{preview?.status === 'symlink' && <p className="field-error">目标是符号链接，无法在此处安装。请调整安装位置后重试。</p>}{receipt && <div className="install-preview"><strong>文件已安装，智能体加载状态待验证</strong><p className="preview-message">在智能体中重新加载或开启新会话，调用 $playbook-playwright。</p>{receipt.backupPath && <><small>原内容备份位置</small><p className="target-path">{receipt.backupPath}</p></>}</div>}<div className="install-actions"><Button icon={installing ? 'clock' : preview?.status === 'installed' ? 'check' : 'skill'} className="primary" onClick={install} disabled={blocked || loading || installing || choosing}>{installing ? '正在安装…' : actionLabel}</Button><span>只有点击安装后才会写入目标目录。</span></div></section></div>
     <aside className="skill-aside"><h3>你的创作流程</h3><div className="creation-step"><span>1</span><div><h4>在智能体中创作</h4><p>使用安装好的 Skill，描述你想保留的操作流程。</p></div></div><div className="creation-step"><span>2</span><div><h4>在 Playbook 中播放</h4><p>打开项目，查看内容，选择运行方式并播放。</p></div></div><div className="creation-step"><span>3</span><div><h4>带着反馈继续完善</h4><p>复制运行上下文，交给智能体修改，再回来验证。</p></div></div><div className="skill-note"><Icon name="shield" size={20} /><p>Playbook 只展示和播放项目内容，不在这里编辑脚本。</p></div></aside></div>;
 }

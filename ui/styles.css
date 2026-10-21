@@ -60,3 +60,5 @@
 .shortcut-hint kbd{font:10px -apple-system,BlinkMacSystemFont,sans-serif;background:#f8fbf4;border:1px solid #d9e3d2;border-bottom-width:2px;border-radius:4px;color:#718a66;padding:2px 5px;white-space:nowrap}
 .shortcut-hint.unavailable{color:#ab8e65}
 .run-step-section{font-size:9px;color:#8ea082;line-height:1.5;margin-bottom:3px}
+
+.project-picker{display:flex;gap:10px;align-items:center}.project-picker input{flex:1;min-width:0;height:36px;border:1px solid #e0e7d8;border-radius:5px;color:#718b60;font-size:11px;background:#fdfefa;padding:0 10px}.project-picker .button{flex-shrink:0}.form-hint{font-size:10px;line-height:1.7;color:#8ca178;margin-top:8px}

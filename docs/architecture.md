@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.3.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.5.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-21。客户端 v0.3.2，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.5.2。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -172,7 +172,7 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 | Codex | `~/.agents/skills/playbook-playwright` | `<project>/.agents/skills/playbook-playwright` |
 | Claude Code | `~/.claude/skills/playbook-playwright` | `<project>/.claude/skills/playbook-playwright` |
 
-用户先选框架/范围/项目，预览目标目录、版本、文件数和状态，明确点击才写入。内置样例不能作项目目标；首版不支持任意自定义路径或自动批量安装。
+用户先选框架/范围；项目范围通过系统文件夹选择器指定任意现有项目目录，不限已登记的演示目录，也不要求 .playbook.json。主进程只接受本次应用会话中通过选择器选过、仍可访问且未被重定向的目录；不自动猜测上级仓库。按框架追加上述固定子目录，预览完整目标、版本、文件数和状态，明确点击才写入。取消选择保留旧目标，更换目录重新预览；选择和预览不写 Skill、不登记演示项目。内置样例不能作项目目标；不支持改写框架子目录或自动批量安装。
 
 | 状态 | 行为 |
 |---|---|

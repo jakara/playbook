@@ -27,9 +27,9 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 已有项目契约与本 Skill 不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
 
-当前安装页 Skill 版本为 **0.5.1**，适配客户端 v0.3；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用，新呈现字段需要 v0.3 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
+当前安装页 Skill 版本为 **0.5.2**，适配客户端 v0.3；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用，新呈现字段需要 v0.3 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
 
-安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-playwright` 或所选业务工作区的 `.agents/skills/playbook-playwright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-playwright` 或 `.claude/skills/playbook-playwright`。项目安装使用选定工作区，不自动改上级仓库；已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。安装成功只代表文件核验通过，需在目标智能体重新加载或开启新会话，确认调用当前版本。
+安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-playwright` 或所选项目目录下的 `.agents/skills/playbook-playwright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-playwright` 或 `.claude/skills/playbook-playwright`。项目安装由用户在系统文件夹选择器中指定智能体打开的项目目录，不要求先登记到 Playbook 或存在 `.playbook.json`；目标追加框架固定的 Skill 子目录，不自动猜测或改为上级仓库。已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。安装成功只代表文件核验通过，需在目标智能体重新加载或开启新会话，确认调用当前版本。
 
 交付可由桌面直接添加的项目：根目录 `.playbook.json`，清单引用的 `.playbook.ts` 与 `.profile.ts`，以及实际所需的业务 helpers。界面统一使用“项目”，工作区是契约中同一目录的技术称呼，不建立另一份资料库。清单按 Book → Section → 脚本组织；界面左侧仅“项目文件夹 → Book”两层，打开 Book 后右侧用 Section Tab 平铺脚本。Book/Section 只保存引用和顺序，不复制动作。顶层默认导出和步骤元数据必须是静态 literal，业务动态行为保留在原生 callbacks 中。不要生成未受支持的动作 JSON、编辑器或自动转换 CLI。
 

@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 const api = {};
-for (const method of ['getState', 'addWorkspace', 'removeWorkspace', 'play', 'setPlaybackSelection', 'control', 'copyContext', 'reveal', 'skillPreview', 'skillInstall']) {
+for (const method of ['getState', 'addWorkspace', 'removeWorkspace', 'play', 'setPlaybackSelection', 'control', 'copyContext', 'reveal', 'chooseSkillProject', 'skillPreview', 'skillInstall']) {
   api[method] = input => ipcRenderer.invoke(`playbook:${method}`, input);
 }
 api.onState = callback => {

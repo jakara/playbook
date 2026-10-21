@@ -8,7 +8,7 @@ import vm from 'node:vm';
 const main = await readFile(new URL('../desktop/main.mjs', import.meta.url), 'utf8');
 const runner = await readFile(new URL('../desktop/runner.mjs', import.meta.url), 'utf8');
 const controlSource = main.slice(main.indexOf('async function control(command)'), main.indexOf('\napp.whenReady()'));
-const playSource = main.slice(main.indexOf('async function play('), main.indexOf('\nfunction installOptions'));
+const playSource = main.slice(main.indexOf('async function play('), main.search(/\n(?:async )?function installOptions/));
 
 function mainContext(extra = {}) {
   const messages = [];

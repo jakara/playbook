@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, clipboard, utilityProcess, globalShortcut } from 'electron';
-import { readFile, mkdir, writeFile, copyFile, rename } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, copyFile, rename, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -13,7 +13,8 @@ const appRoot = app.getAppPath();
 const starter = path.join(appRoot, 'examples/starter');
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-playwright');
-const skillVersion = '0.5.1';
+const skillVersion = '0.5.2';
+const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;
 let playbackControl, playbackSelection, controlIntent;
@@ -142,11 +143,13 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
   } finally { launchBusy = false; }
 }
 
-function installOptions(input) {
+async function installOptions(input) {
   if (!['user', 'project'].includes(input.scope) || !FRAMEWORKS.some(item => item.id === input.framework)) throw new Error('请选择支持的框架和安装范围');
-  const workspace = workspaces.find(item => item.id === input.workspaceId);
-  if (input.scope === 'project' && (!workspace || workspace.path === starter)) throw new Error('项目安装请选择你自己的业务目录，内置样例不作安装目标');
-  return { sourceDir: skillDir, version: skillVersion, targetDir: targetFor({ framework: input.framework, scope: input.scope, home: homedir(), projectRoot: workspace?.path }), backupRoot: path.join(dataDir, 'backups/skills') };
+  if (input.scope === 'project') {
+    if (!skillProjects.has(input.projectRoot)) throw new Error('请先选择要安装 Skill 的项目文件夹');
+    if (!(await stat(input.projectRoot)).isDirectory() || await realpath(input.projectRoot) !== input.projectRoot) throw new Error('项目文件夹已改变，请重新选择');
+  }
+  return { sourceDir: skillDir, version: skillVersion, targetDir: targetFor({ framework: input.framework, scope: input.scope, home: homedir(), projectRoot: input.projectRoot }), backupRoot: path.join(dataDir, 'backups/skills') };
 }
 function handle(name, action, allowControl = false) {
   ipcMain.handle(`playbook:${name}`, async (event, input) => {
@@ -246,8 +249,17 @@ app.whenReady().then(async () => {
     const item = workspace.items.find(item => item.id === input.entryId);
     shell.showItemInFolder(item ? await inside(workspace.path, item.file) : path.join(workspace.path, '.playbook.json'));
   });
-  handle('skillPreview', input => inspectSkill(installOptions(input)));
-  handle('skillInstall', input => installSkill({ ...installOptions(input), replace: input.replace === true }));
+  handle('chooseSkillProject', async () => {
+    const result = await dialog.showOpenDialog(window, { title: '选择智能体使用的项目文件夹', properties: ['openDirectory'] });
+    if (result.canceled || !result.filePaths.length) return null;
+    const root = await realpath(result.filePaths[0]);
+    if (!(await stat(root)).isDirectory()) throw new Error('请选择项目文件夹');
+    if (root === await realpath(starter)) throw new Error('内置样例不作安装目标，请选择自己的项目文件夹');
+    skillProjects.add(root);
+    return root;
+  });
+  handle('skillPreview', async input => inspectSkill(await installOptions(input)));
+  handle('skillInstall', async input => installSkill({ ...await installOptions(input), replace: input.replace === true }));
   await playbackControl.ready;
   await window.loadFile(path.join(appRoot, 'build/ui/index.html'));
   setInterval(() => void refresh().catch(() => {}), 1400).unref();
