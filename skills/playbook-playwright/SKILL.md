@@ -5,7 +5,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 # Playbook 创作与维护
 
-帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、编排和 TC 转换；桌面应用负责发现、搜索、播放、暂停继续、停止重播与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
+帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、Book/Section 编排和 TC 转换；桌面应用负责项目浏览、搜索、播放、暂停继续、停止重播与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
 
 ## 开始时
 
@@ -19,11 +19,11 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 已有项目契约与本 Skill 不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
 
-当前安装页 Skill 版本为 **0.3.0**；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
+当前安装页 Skill 版本为 **0.4.0**，适配客户端 v0.2；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
 
 安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-playwright` 或所选业务工作区的 `.agents/skills/playbook-playwright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-playwright` 或 `.claude/skills/playbook-playwright`。项目安装使用选定工作区，不自动改上级仓库；已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。
 
-交付可由桌面直接添加的工作区：根目录 `.playbook.json`，清单引用的 `.playbook.ts` 与 `.profile.ts`，以及实际所需的业务 helpers。顶层默认导出和步骤元数据必须是静态 literal，业务动态行为保留在原生 callbacks 中。不要生成未受支持的动作 JSON、编辑器或自动转换 CLI。
+交付可由桌面直接添加的项目：根目录 `.playbook.json`，清单引用的 `.playbook.ts` 与 `.profile.ts`，以及实际所需的业务 helpers。界面统一使用“项目”，工作区是契约中同一目录的技术称呼，不建立另一份资料库。项目内按 Book → Section → 脚本组织；Book/Section 只保存引用和顺序，不复制动作。顶层默认导出和步骤元数据必须是静态 literal，业务动态行为保留在原生 callbacks 中。不要生成未受支持的动作 JSON、编辑器或自动转换 CLI。
 
 ## 语义边界
 
@@ -39,7 +39,9 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 按任务交付目标脚本和适用的 TC/环境适配入口；涉及 TC 转换时，按 [报告规范](references/conversion-report.md) 记录对应关系和验证结果。能从原代码确认的内容自行确定，不要求用户重复提供。
 
-普通创作和小范围调整可直接说明需求、文件、实际验证与缺口，不强制另建 PRD 或转换报告。涉及 TC 转换时使用上述报告规范；同步清单中的脚本、Profile、标签和演示引用。
+普通创作和小范围调整可直接说明需求、文件、实际验证与缺口，不强制另建 PRD 或转换报告。涉及 TC 转换时使用上述报告规范；同步清单中的脚本、Profile、标签和 Book/Section 引用。按 Book 或 Section 播放时，所有脚本使用所选同一 Profile，每个脚本单独 prepare/release，不能依赖上一脚本的页面或内存上下文。
+
+进度和播放控制由客户端原生悬浮条提供，约 3 秒无鼠标/键盘活动后隐藏，活动后显现。默认系统快捷键为 `CommandOrControl+Alt+P`，用于播放/暂停；注册失败会提示。脚本只描述开场、箭头、蒙层、光圈等页面引导，不向业务页面注入进度条、快捷键 hook 或另一套控制 UI。这些客户端行为不是单脚本呈现参数。
 
 分别核对业务项目的类型检查、桌面静态检查和实际播放。应用参数 `--check-workspace <工作区绝对路径>` 只检查静态元数据、引用与编译打包，输出明确标记 `typecheck: not-run`、`browser: not-run`；不能据此声称类型、登录、业务断言或视觉回放通过。具备已授权的隔离环境时运行实际入口；TC 转换还应对照原用例与转换后入口，可行时用刻意失败的预期确认断言仍生效。
 

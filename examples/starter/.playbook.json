@@ -1,10 +1,58 @@
 {
   "schemaVersion": 1,
   "title": "Playbook 入门样例",
-  "profiles": [{ "id": "local-sample", "title": "本地合成页面 · 无需登录", "file": "profiles/local.profile.ts", "dataMode": "fixture", "parameters": {} }],
-  "scripts": [
-    { "file": "flows/overview.playbook.ts", "profile": "local-sample", "tags": ["入门", "培训", "查看"] },
-    { "file": "flows/catalog.playbook.ts", "profile": "local-sample", "tags": ["教师", "课程", "搜索", "任务预览"] }
+  "profiles": [
+    {
+      "id": "local-sample",
+      "title": "本地合成页面 · 无需登录",
+      "file": "profiles/local.profile.ts",
+      "dataMode": "fixture",
+      "parameters": {}
+    }
   ],
-  "demos": [{ "id": "teacher-training", "title": "教师首次使用培训", "summary": "先认识工作台，再完成课程搜索与任务预览。", "scripts": ["starter.overview", "starter.catalog"], "profile": "local-sample" }]
+  "scripts": [
+    {
+      "file": "flows/overview.playbook.ts",
+      "profile": "local-sample",
+      "tags": [
+        "入门",
+        "培训",
+        "查看"
+      ]
+    },
+    {
+      "file": "flows/catalog.playbook.ts",
+      "profile": "local-sample",
+      "tags": [
+        "教师",
+        "课程",
+        "搜索",
+        "任务预览"
+      ]
+    }
+  ],
+  "books": [
+    {
+      "id": "teacher-training",
+      "title": "教师首次使用培训",
+      "summary": "从认识工作台到查找课程与任务预览。",
+      "profile": "local-sample",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "认识课程工作台",
+          "scripts": [
+            "starter.overview"
+          ]
+        },
+        {
+          "id": "practice",
+          "title": "课程搜索与任务预览",
+          "scripts": [
+            "starter.catalog"
+          ]
+        }
+      ]
+    }
+  ]
 }

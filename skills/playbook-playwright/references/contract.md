@@ -1,10 +1,10 @@
 # 当前桌面契约：schemaVersion 1
 
-适用于内置 Skill 0.3.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
+适用于客户端 v0.2、内置 Skill 0.4.0。Skill 安装版本、SDK 包版本和 schemaVersion 分别核对。`definePlaybook`、`defineProfile` 与桌面播放器已可用；`runPlaybook` 是供 TC 复用的无呈现执行器。
 
 ## 工作区与清单
 
-桌面添加的是含 `.playbook.json` 的业务目录。资产路径为该目录内的相对路径。以下清单、脚本和 Profile 相互对应；演示对象是合成页面，不假设业务系统有同名控件。
+桌面添加的是含 `.playbook.json` 的业务目录，界面称为“项目”；文档/API 中的 workspace 指同一目录，不是另一层资料库。项目内层级是 Book → Section → 可执行脚本。资产路径为项目目录内的相对路径。以下清单、脚本和 Profile 相互对应；演示对象是合成页面，不假设业务系统有同名控件。
 
 ```json
 {
@@ -12,17 +12,28 @@
   "title": "课程演示",
   "profiles": [{ "id": "local-sample", "title": "本地合成页面", "file": "profiles/local.profile.ts", "dataMode": "fixture", "parameters": {} }],
   "scripts": [{ "file": "flows/courses.playbook.ts", "profile": "local-sample", "tags": ["课程", "搜索"] }],
-  "demos": [{ "id": "course-training", "title": "课程培训", "scripts": ["courses.search"], "profile": "local-sample" }]
+  "books": [{
+    "id": "course-training", "title": "课程培训", "summary": "课程管理入门", "profile": "local-sample",
+    "sections": [{ "id": "find-courses", "title": "查找课程", "scripts": ["courses.search"] }]
+  }]
 }
 ```
 
-`demos` 可省略，其 scripts 引用流程 ID 而非文件名，按数组顺序播放。组合使用同一 Profile，所有流程的数据模式必须与之相同。Profile 和流程 ID 各自唯一，步骤 ID 在各流程内唯一。parameters 为明文可序列化配置，不是密码库；凭据读取既有私有文件或已授权环境。
+`books` 可省略。Book 为 `{ id, title, summary?, profile?, sections }`；Section 为 `{ id, title, summary?, scripts }`，sections 和 scripts 均须非空。`scripts` 引用已注册流程 ID，而非文件名，同一 Section 内不重复引用同一脚本。Book ID 在项目内唯一，Section ID 在所属 Book 内唯一；两者均使用 `[A-Za-z0-9._-]+`，Section 的组合键为 `bookId/sectionId`，不在 ID 内写 `/`。
+
+Book 的“播放全部”依次展开 `sections` 数组，再依次展开每个 Section 的 `scripts` 数组；Section 的“播放全部”只按自身 `scripts` 顺序执行。单脚本仍可独立播放。Book 的 `profile` 可指定默认环境，实际播放使用用户选定的同一 Profile；所有脚本的数据模式与角色要求都必须与之兼容。每个脚本都单独 prepare/release，不隐式共享上一脚本的页面与内存。
+
+旧清单 `demos: [{ id, title, summary?, scripts, profile? }]` 仍可读取，客户端将它归一为 Book 和单个 Section，不改写用户清单。新建或调整编排使用 `books`，保留原有稳定引用；不要同时复制为两份业务流程。
+
+Profile 和流程 ID 各自唯一，步骤 ID 在各流程内唯一。parameters 为明文可序列化配置，不是密码库；凭据读取既有私有文件或已授权环境。
 
 ## 原生脚本与静态元数据
 
 `.playbook.ts` 使用 `export default definePlaybook({...})`。顶层对象、requirements、steps 数组及每步 ID、标题、说明和呈现字段写成 literal。浏览时只解析元数据，不执行模块；`scenario()`、变量引用、spread、模板插值、`.map()` 生成 steps 无法用于发现。动态逻辑放进 run/verify 或普通 helper，不把回调 stringify。
 
 `flows/courses.playbook.ts`：
+
+这里的 SDK `Playbook` 类型和 `definePlaybook()` 仍表示一个可执行脚本；上层 Book/Section 是清单容器，不通过 `definePlaybook()` 定义。
 
 ```ts
 import { expect } from '@playwright/test';
@@ -98,13 +109,19 @@ read-only/replay 声明不是拦截器或代码沙箱。依据真实业务实现
 
 1. 运行业务项目已有类型检查，确保本地 SDK、Playwright 类型与业务 helpers 可以解析。
 2. 用当前 Playbook 可执行文件传入 `--check-workspace <工作区绝对路径>`。它只检查静态元数据、清单引用与编译打包，不执行 Profile 或浏览器；结果明确为 `typecheck: not-run`、`browser: not-run`。esbuild 编译成功不等于 TypeScript 类型通过。
-3. 在已授权环境从桌面添加工作区，选择脚本或组合演示及 Profile，实际播放并核对业务结果、说明遮挡、暂停继续、停止和重播。涉及写入与恢复时按真实风险验证。
+3. 在已授权环境从桌面添加项目，选择脚本、Section 或 Book 及 Profile，实际播放并核对业务结果、顺序、说明遮挡、暂停继续、停止和重播。Book/Section 批量播放须核对每个脚本的准备和释放。涉及写入与恢复时按真实风险验证。
 
 桌面按本轮快照播放，源资产变更影响下一轮。清单、Profile、脚本和静态相对 imports 参与变更检测；运行时读取的私有配置不等于已纳入代码指纹。不要修改应用缓存来替代业务源文件。
 
+## 客户端控制与页面呈现
+
+浏览器注入负责开场、章节、箭头提示、蒙层、光圈与演示光标。进度条和播放控制由 Electron 原生透明置顶悬浮窗提供，不注入业务 DOM。它约 3 秒无输入后隐藏，在鼠标或键盘活动后显现；客户端使用系统空闲时间和鼠标坐标判断活动，不读取按键内容。
+
+默认系统快捷键 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）切换播放/暂停；空闲时播放主界面当前选择，终态允许从头重播，仍遵守原重播策略。注册冲突会提示，不承诺快捷键始终可用或所有系统已经验收。不要把这套全局控制写进脚本、监听业务页面键盘，或为单个脚本新增悬浮条配置字段。
+
 ## TC 复用与独立导出
 
-runPlaybook 顺序执行 `beforeStep → run → verify → afterStep`，可由 aroundStep 包裹一次，异常向上传播。它不创建浏览器、准备 Profile、渲染讲解或管理暂停停止，也不等待阅读时间。
+runPlaybook 接收一个可执行脚本，不接收清单 Book/Section。它顺序执行 `beforeStep → run → verify → afterStep`，可由 aroundStep 包裹一次，异常向上传播。它不创建浏览器、准备 Profile、渲染讲解或管理暂停停止，也不等待阅读时间。
 
 以下是绑定业务已有 fixture 的形状示例，不附带虚构 fixture 实现：
 

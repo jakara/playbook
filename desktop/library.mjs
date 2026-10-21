@@ -54,7 +54,7 @@ export function metadata(source, filename) {
 export async function readWorkspace(directory) {
   const root = await realpath(directory);
   const id = hash(root).slice(0, 16);
-  const output = { id, path: root, name: path.basename(root), items: [], profiles: [], demos: [], token: '' };
+  const output = { id, path: root, name: path.basename(root), items: [], profiles: [], books: [], demos: [], token: '' };
   try {
     const manifestText = await readFile(await inside(root, '.playbook.json'), 'utf8');
     const manifest = JSON.parse(manifestText);
@@ -92,6 +92,31 @@ export async function readWorkspace(directory) {
       if (!profileIds.has(defaultProfileId)) throw new Error('演示环境不存在');
       output.demos.push({ ...demo, defaultProfileId });
     }
+    if (!Array.isArray(manifest.books || [])) throw new Error('books 必须是数组');
+    const books = [...(manifest.books || [])];
+    // Read legacy compositions without rewriting any business asset.
+    for (const demo of output.demos) if (!books.some(book => book.id === demo.id)) {
+      books.push({ id: demo.id, title: demo.title, summary: demo.summary, profile: demo.defaultProfileId,
+        sections: [{ id: 'main', title: '核心流程', scripts: demo.scripts }] });
+    }
+    const bookIds = new Set();
+    const identifier = value => typeof value === 'string' && /^[A-Za-z0-9._-]+$/.test(value);
+    for (const book of books) {
+      if (!identifier(book.id) || bookIds.has(book.id) || !book.title || !Array.isArray(book.sections) || !book.sections.length) throw new Error('Book 标识重复、无效或缺少 Section');
+      bookIds.add(book.id);
+      const sectionIds = new Set();
+      const defaultProfileId = book.profile || output.items.find(item => item.id === book.sections[0]?.scripts?.[0])?.defaultProfileId;
+      const profile = output.profiles.find(item => item.id === defaultProfileId);
+      if (!profile) throw new Error('Book 环境不存在');
+      const sections = book.sections.map(section => {
+        if (!identifier(section.id) || sectionIds.has(section.id) || !section.title || !Array.isArray(section.scripts) || !section.scripts.length) throw new Error('Section 标识重复、无效或缺少脚本');
+        sectionIds.add(section.id);
+        if (new Set(section.scripts).size !== section.scripts.length) throw new Error('Section 内不能重复引用同一脚本');
+        if (section.scripts.some(id => !output.items.some(item => item.id === id && item.valid && item.requirements.dataMode === profile.dataMode))) throw new Error('Section 引用了不可用脚本或不匹配的数据环境');
+        return { id: section.id, key: `${book.id}/${section.id}`, title: section.title, summary: section.summary || '', scripts: section.scripts, defaultProfileId };
+      });
+      output.books.push({ id: book.id, title: book.title, summary: book.summary || '', defaultProfileId, sections });
+    }
     // Watch imported helpers and profiles too; only read files, with bounded traversal.
     const roots = [...manifest.scripts, ...manifest.profiles].map(item => item.file);
     const visited = new Set();
@@ -118,12 +143,20 @@ export async function readWorkspace(directory) {
 
 export function selection(workspace, entryId, kind, profileId) {
   if (workspace.error) throw new Error(workspace.error);
-  const demo = kind === 'demo' ? workspace.demos.find(item => item.id === entryId) : null;
-  const items = demo ? demo.scripts.map(id => workspace.items.find(item => item.id === id)) : [workspace.items.find(item => item.id === entryId)];
+  if (!['script', 'book', 'section', 'demo'].includes(kind)) throw new Error('播放类型无效');
+  const book = ['book', 'demo'].includes(kind) ? workspace.books.find(item => item.id === entryId)
+    : kind === 'section' ? workspace.books.find(item => item.sections.some(section => section.key === entryId)) : null;
+  const section = kind === 'section' ? book?.sections.find(item => item.key === entryId) : null;
+  if (kind !== 'script' && (!book || (kind === 'section' && !section))) throw new Error('Book 或 Section 不存在');
+  const items = book ? (section ? [section] : book.sections).flatMap(part => part.scripts.map(id => {
+    const script = workspace.items.find(item => item.id === id);
+    return script ? { ...script, bookId: book.id, bookTitle: book.title, sectionId: part.id, sectionTitle: part.title } : undefined;
+  })) : [workspace.items.find(item => item.id === entryId)];
   if (!items.length || items.some(item => !item?.valid)) throw new Error('脚本不存在或尚未就绪');
-  const profile = workspace.profiles.find(item => item.id === (profileId || demo?.defaultProfileId || items[0].defaultProfileId));
+  if (items.some((item, index) => item.requirements.replay === 'single-run' && items.findIndex(other => other.id === item.id) !== index)) throw new Error('单次执行脚本不能在同一批次重复播放');
+  const profile = workspace.profiles.find(item => item.id === (profileId || book?.defaultProfileId || items[0].defaultProfileId));
   if (!profile || items.some(item => item.requirements.dataMode !== profile.dataMode)) throw new Error('环境与所选脚本不匹配');
-  return { title: demo?.title || items[0].title, items, profile };
+  return { title: section?.title || book?.title || items[0].title, items, profile };
 }
 
 export async function snapshot({ workspace, items, profile, outputDir, appRoot }) {

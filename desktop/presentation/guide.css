@@ -29,34 +29,17 @@
 .ygd-halo { position: absolute; left: -31px; top: -31px; width: 68px; height: 68px; border-radius: 50%; border: 2px solid #5f9cffc9; background: #73abff1a; box-shadow: 0 0 0 8px #86b2ff15, 0 0 32px #88b7ff55; }
 .ygd-ripple { position: absolute; left: -12px; top: -12px; width: 30px; height: 30px; border: 3px solid #2766b9; border-radius: 50%; opacity: 0; }
 .ygd-click .ygd-ripple { animation: ygd-click .65s ease-out; }
-#ygd-toolbar {
-  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  width: min(880px,94vw); min-height: 70px; display: flex; align-items: center; gap: 26px;
-  padding: 15px 22px 18px; border: 1px solid #ffffff26; border-radius: 14px; color: #edf3ff;
-  background: #142137f5; box-shadow: 0 12px 35px #07132940; pointer-events: auto !important;
-}
-.ygd-brand { display: flex; align-items: center; gap: 9px; white-space: nowrap; font-size: 13px; font-weight: 600; }
-.ygd-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #77c9aa; box-shadow: 0 0 0 4px #77c9aa14; }
-[data-phase="paused"] .ygd-status-dot { background: #efc37b; }
-.ygd-now { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#ygd-count { font-size: 10px; color: #a7bad5; letter-spacing: 1px; }
-#ygd-current { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ygd-controls { display: flex; gap: 8px; }
-.ygd-controls button { background: #ffffff10; color: #eef5ff; border: 1px solid #ffffff26; border-radius: 6px; padding: 5px 12px; font-size: 12px !important; white-space: nowrap; }
-.ygd-controls button:hover:enabled { background: #ffffff22; }
-#ygd-track { height: 3px; position: absolute; left: 18px; right: 18px; bottom: 0; overflow: hidden; border-radius: 4px; background: #ffffff10; }
-#ygd-track i { display: block; width: 0; height: 100%; background: #8bb9f5; transition: width .4s ease; }
 .driver-popover.ygd-popover { min-width: 300px; max-width: 360px; padding: 22px 25px; border-radius: 12px; border: 1px solid #dce6f0; box-shadow: 0 16px 50px #13233d35; font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
 .ygd-popover .driver-popover-title { font-size: 20px; line-height: 1.5; font-weight: 700; color: #1a2c48; padding: 0; }
 .ygd-popover .driver-popover-description { color: #526079; font-size: 15px; line-height: 1.85; margin-top: 9px; }
 .ygd-step-tag { display: block; margin-bottom: 9px; color: #3f71b5; font-size: 11px; font-weight: 650; letter-spacing: .7px; }
 .ygd-popover .driver-popover-footer { display: none; }
 .driver-active #ygd-root, .driver-active #ygd-root * { pointer-events: none; }
-.driver-active #ygd-card, .driver-active #ygd-card *, .driver-active #ygd-toolbar, .driver-active #ygd-toolbar * { pointer-events: auto !important; }
+.driver-active #ygd-card, .driver-active #ygd-card * { pointer-events: auto !important; }
 .driver-overlay, .driver-overlay * { pointer-events: none !important; }
 .driver-layer { pointer-events: none !important; }
 /* 实时列表会替换节点，不能靠旧节点上的 Driver class 放行点击。 */
 body.driver-active * { pointer-events: revert; }
 @keyframes ygd-in { from { opacity: 0; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
 @keyframes ygd-click { from { opacity: .9; scale: .5; } to { opacity: 0; scale: 3; } }
-@media (max-width: 800px) { #ygd-card { padding: 32px; } .ygd-brand { display: none; } #ygd-toolbar { gap: 10px; } }
+@media (max-width: 800px) { #ygd-card { padding: 32px; } }

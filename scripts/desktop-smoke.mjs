@@ -12,8 +12,13 @@ const project = path.join(temp, 'project'), userData = path.join(temp, 'app-data
 await cp(path.join(root, 'examples/starter'), project, { recursive: true });
 const manifestFile = path.join(project, '.playbook.json');
 const manifest = JSON.parse(await readFile(manifestFile, 'utf8')); manifest.title = '验收工作区';
+delete manifest.demos;
+manifest.books = [{ id: 'teacher-training', title: '教师首次使用培训', summary: '先认识工作台，再完成课程搜索与任务预览。', profile: 'local-sample', sections: [
+  { id: 'orientation', title: '认识工作台', scripts: ['starter.overview'] },
+  { id: 'courses', title: '课程与任务', scripts: ['starter.catalog'] },
+] }];
 await writeFile(manifestFile, JSON.stringify(manifest, null, 2));
-const output = path.join(root, 'artifacts', process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'packaged-smoke' : 'desktop-smoke'); await mkdir(output, { recursive: true });
+const output = path.join(root, 'artifacts', `${process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'v02-packaged-smoke' : 'v02-desktop-smoke'}-${Date.now()}`); await mkdir(output, { recursive: true });
 await mkdir(userData, { recursive: true });
 // The single-run record must survive beyond the UI's recent 100 rows.
 await writeFile(path.join(userData, 'runs.json'), JSON.stringify([
@@ -36,6 +41,7 @@ delete env.ELECTRON_RUN_AS_NODE;
 const launched = await electron.launch({ ...(process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? { executablePath: process.env.PLAYBOOK_PACKAGED_EXECUTABLE, args: [] } : { args: [root] }), env, timeout: 25000 });
 let page;
 const errors = [], checks = {};
+const activityVerification = { source: 'Simulated system idle and pointer signals drive the real native window polling.', shortcut: 'The real Electron globalShortcut registry is checked; no actual system keypress is claimed.' };
 const state = () => page.evaluate(() => window.playbook.getState());
 async function until(predicate, timeout = 25000) {
   const end = Date.now() + timeout;
@@ -43,24 +49,66 @@ async function until(predicate, timeout = 25000) {
   throw new Error(`Desktop state timeout: ${JSON.stringify((await state()).activeRun)}`);
 }
 async function call(method, input) { return page.evaluate(({ method, input }) => window.playbook[method](input), { method, input }); }
+async function nativeControlPage() {
+  const end = Date.now() + 10000;
+  while (Date.now() < end) {
+    for (const candidate of launched.windows()) if (await candidate.title() === 'Playbook 播放控制') return candidate;
+    await sleep(100);
+  }
+  throw new Error('Independent native playback control window was not created');
+}
+async function setIdle(seconds) { await launched.evaluate((_, value) => { globalThis.__playbookSmokeIdle = value; }, seconds); }
 try {
-  page = await launched.firstWindow(); page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: '资料库', exact: true }).waitFor();
+  await launched.firstWindow();
+  for (let attempt = 0; attempt < 100 && !page; attempt++) {
+    for (const candidate of launched.windows()) if (await candidate.evaluate(() => Boolean(window.playbook)).catch(() => false)) { page = candidate; break; }
+    if (!page) await sleep(50);
+  }
+  assert.ok(page, 'Main project window must exist'); page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('heading', { name: '项目', exact: true }).waitFor();
   const initial = await state(), workspace = initial.workspaces.find(item => item.path === project);
   assert.ok(workspace && workspace.items.every(item => item.valid));
-  assert.equal(workspace.items.length, 2); assert.equal(workspace.demos.length, 1); checks.discovery = true;
+  assert.equal(workspace.items.length, 2); assert.equal(workspace.books.length, 1);
+  assert.equal(workspace.books[0].sections.length, 2); checks.discovery = true;
+  const shortcut = initial.playbackControl?.shortcut || initial.playbackShortcut;
+  assert.equal(shortcut?.registered, true, shortcut?.error || 'Global play/pause shortcut must register');
+  assert.equal(await launched.evaluate(({ globalShortcut }, accelerator) => globalShortcut.isRegistered(accelerator), shortcut.accelerator), true);
+  checks.globalShortcutRegistered = true;
   await page.getByLabel('筛选项目').selectOption(workspace.id);
-  const search = page.getByRole('textbox', { name: '搜索脚本、演示、标签或角色' });
+  const search = page.getByRole('textbox', { name: '搜索 Book、Section、脚本、标签或角色' });
   await search.fill('找不到的内容'); await expect(page.getByText('没有匹配的内容', { exact: true })).toBeVisible();
-  await search.fill('任务预览'); await expect(page.locator('.entry-card')).toHaveCount(2); checks.search = true;
+  await search.fill('任务预览');
+  await expect(page.locator('.entry-card')).toHaveCount(1);
+  await expect(page.locator('.book-group')).toHaveCount(1);
+  await expect(page.locator('.section-group')).toHaveCount(1); checks.search = true;
   await search.fill('');
   await page.getByRole('button', { name: '查看脚本 查找课程并预览课堂任务', exact: true }).click();
   await page.screenshot({ path: path.join(output, '01-library.png') });
   await page.getByRole('button', { name: '播放脚本', exact: true }).click();
   await until(value => value.activeRun?.state === 'playing');
-  await page.getByRole('button', { name: '暂停播放', exact: true }).click();
+  await launched.evaluate(({ powerMonitor, screen }) => {
+    globalThis.__playbookSmokeOriginalIdle = powerMonitor.getSystemIdleTime;
+    globalThis.__playbookSmokeOriginalPointer = screen.getCursorScreenPoint;
+    globalThis.__playbookSmokeIdle = 0;
+    powerMonitor.getSystemIdleTime = () => globalThis.__playbookSmokeIdle;
+    screen.getCursorScreenPoint = () => ({ x: 100, y: 100 });
+  });
+  await until(value => value.playbackControl?.visible === true);
+  const native = await nativeControlPage(); native.on('pageerror', error => errors.push(error.message));
+  assert.equal(await native.evaluate(() => typeof window.playbookControl?.getState), 'function');
+  assert.equal(await native.evaluate(() => typeof window.playbook), 'undefined');
+  await expect(native.locator('#playbook-playback-progress')).toHaveAttribute('role', 'progressbar');
+  await native.getByRole('button', { name: '暂停播放', exact: true }).click();
   const paused = await until(value => value.activeRun?.state === 'paused');
   await sleep(350); assert.equal((await state()).activeRun.completed, paused.activeRun.completed); checks.pause = true;
+  await setIdle(10);
+  await until(value => value.playbackControl?.visible === false, 8000);
+  assert.equal(await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制')?.isVisible()), false);
+  await setIdle(0);
+  await until(value => value.playbackControl?.visible === true, 8000);
+  assert.equal(await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制')?.isVisible()), true);
+  await native.screenshot({ path: path.join(output, '02-native-playback-control.png') });
+  checks.nativeOverlayActivity = true;
   const flowFile = path.join(project, 'flows/catalog.playbook.ts'), originalFlow = await readFile(flowFile, 'utf8');
   await writeFile(flowFile, originalFlow.replace('查找课程并预览课堂任务', '已更新的课程演示').replace('输入课程关键词', '更新后的步骤标题'));
   await until(value => value.activeRun?.sourceChanged === true);
@@ -68,7 +116,7 @@ try {
   assert.equal((await state()).activeRun.steps[0].title, '输入课程关键词');
   await expect(page.getByText('更新后的步骤标题', { exact: true })).toHaveCount(0); checks.frozenRevision = true;
   await page.screenshot({ path: path.join(output, '02-paused.png') });
-  await page.getByRole('button', { name: '继续播放', exact: true }).click();
+  await native.getByRole('button', { name: '继续播放', exact: true }).click();
   const first = await until(value => ['completed', 'failed'].includes(value.activeRun?.state), 45000);
   assert.equal(first.activeRun.state, 'completed', first.activeRun.error); assert.equal(first.activeRun.completed, 5); checks.play = true;
   const capturePath = path.join(userData, 'evidence', first.activeRun.id);
@@ -77,17 +125,34 @@ try {
   assert.equal(targets.length, 5);
   assert.ok(targets.every(item => item.arrow && item.popoverVisible && item.x === item.apertureX && item.y === item.apertureY));
   assert.ok(targets.some(item => item.rootParent === 'DIALOG')); checks.guideLayers = true;
+  assert.ok(visuals.every(item => item.toolbarPresent === false), 'The controlled browser must not contain the playback toolbar');
+  checks.noInjectedPlaybackControls = true;
   await cp(capturePath, path.join(output, 'guide'), { recursive: true });
   await page.screenshot({ path: path.join(output, '03-complete.png') });
+  await until(value => value.playbackControl?.visible === false); checks.terminalControlHidden = true;
   await writeFile(flowFile, originalFlow);
   await until(value => value.workspaces.find(item => item.id === workspace.id).items.some(item => item.title === '查找课程并预览课堂任务'));
   await page.getByRole('button', { name: '从头再播', exact: true }).click();
   await until(value => value.activeRun?.id !== first.activeRun.id && value.activeRun?.state === 'playing');
-  await page.getByRole('button', { name: '停止播放', exact: true }).click();
+  await until(value => value.playbackControl?.visible === true);
+  await native.getByRole('button', { name: '停止播放', exact: true }).click();
   await until(value => value.activeRun?.state === 'stopped'); checks.stopReplay = true;
-  await call('play', { workspaceId: workspace.id, entryId: 'teacher-training', kind: 'demo', profileId: 'local-sample' });
-  const demo = await until(value => ['completed', 'failed'].includes(value.activeRun?.state), 45000);
-  assert.equal(demo.activeRun.state, 'completed', demo.activeRun.error); assert.equal(demo.activeRun.completed, 7); checks.composition = true;
+  await page.getByRole('button', { name: '项目', exact: true }).click();
+  await page.getByRole('button', { name: '播放整个 Section 课程与任务', exact: true }).click();
+  const section = await until(value => ['completed', 'failed'].includes(value.activeRun?.state) && value.activeRun?.kind === 'section', 45000);
+  assert.equal(section.activeRun.state, 'completed', section.activeRun.error); assert.equal(section.activeRun.completed, 5);
+  assert.deepEqual(section.activeRun.flowIds, ['starter.catalog']);
+  const sectionVisuals = JSON.parse(await readFile(path.join(userData, 'evidence', section.activeRun.id, 'visual-checks.json'), 'utf8'));
+  assert.deepEqual(sectionVisuals.filter(item => item.name.startsWith('opening-')).map(item => item.name), ['opening-starter.catalog']); checks.sectionPlayback = true;
+  await page.getByRole('button', { name: '项目', exact: true }).click();
+  await page.getByRole('button', { name: '播放整个 Book 教师首次使用培训', exact: true }).click();
+  const book = await until(value => ['completed', 'failed'].includes(value.activeRun?.state) && value.activeRun?.kind === 'book', 45000);
+  assert.equal(book.activeRun.state, 'completed', book.activeRun.error); assert.equal(book.activeRun.completed, 7);
+  assert.deepEqual(book.activeRun.flowIds, ['starter.overview', 'starter.catalog']);
+  const bookEvidence = path.join(userData, 'evidence', book.activeRun.id);
+  const bookVisuals = JSON.parse(await readFile(path.join(bookEvidence, 'visual-checks.json'), 'utf8'));
+  assert.deepEqual(bookVisuals.filter(item => item.name.startsWith('opening-')).map(item => item.name), ['opening-starter.overview', 'opening-starter.catalog']);
+  await cp(bookEvidence, path.join(output, 'book'), { recursive: true }); checks.bookPlaybackOrder = true;
   const broken = structuredClone(manifest); broken.profiles[0].parameters.brokenExpectation = true;
   await writeFile(manifestFile, JSON.stringify(broken)); await sleep(1600);
   await call('play', { workspaceId: workspace.id, entryId: 'starter.catalog', kind: 'script', profileId: 'local-sample' });
@@ -101,7 +166,7 @@ try {
   assert.deepEqual(await files(project), before); checks.readOnly = true;
   await page.getByRole('button', { name: 'Skill 安装', exact: true }).click();
   await page.getByRole('radio', { name: /指定项目/ }).check();
-  await page.getByLabel('工作项目', { exact: true }).selectOption(workspace.id);
+  await page.getByLabel('项目', { exact: true }).selectOption(workspace.id);
   await page.getByRole('button', { name: '安装 Skill', exact: true }).click();
   await expect(page.getByRole('button', { name: '已安装当前版本', exact: true })).toBeVisible();
   const installed = path.join(project, '.agents/skills/playbook-playwright/SKILL.md');
@@ -119,10 +184,16 @@ try {
   assert.ok(backup.includes('本地自定义内容')); checks.modifiedSkillBackup = true;
   await page.screenshot({ path: path.join(output, '04-skill-install.png') });
   assert.deepEqual(errors, []);
-  await writeFile(path.join(output, 'verification.json'), JSON.stringify({ checkedAt: new Date().toISOString(), executable: process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'packaged-app' : 'development-electron', checks, pageErrors: errors, userData, report: 'Synthetic workspace only; no real agent directory or business service changed.' }, null, 2));
+  await writeFile(path.join(output, 'verification.json'), JSON.stringify({ checkedAt: new Date().toISOString(), executable: process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'packaged-app' : 'development-electron', checks, activityVerification, pageErrors: errors, userData, report: 'Synthetic workspace only; no real agent directory or business service changed.' }, null, 2));
   console.log(JSON.stringify({ status: 'passed', checks, evidence: output }));
 } catch (error) {
   if (page) await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
   await writeFile(path.join(output, 'failure.json'), JSON.stringify({ error: error.message, checks, state: page ? await state().catch(() => null) : null }, null, 2));
   throw error;
-} finally { await launched.close(); }
+} finally {
+  await launched.evaluate(({ powerMonitor, screen }) => {
+    if (globalThis.__playbookSmokeOriginalIdle) powerMonitor.getSystemIdleTime = globalThis.__playbookSmokeOriginalIdle;
+    if (globalThis.__playbookSmokeOriginalPointer) screen.getCursorScreenPoint = globalThis.__playbookSmokeOriginalPointer;
+  }).catch(() => {});
+  await launched.close();
+}

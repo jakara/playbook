@@ -1,3 +1,34 @@
+# 桌面 v0.2 验证记录
+
+日期：2026-10-21，macOS Apple Silicon。用户范围：项目 → Book → Section → 脚本、两级播放全部、原生自动显隐控制条与全局快捷键。
+
+## 已验证
+
+| 检查 | 实际结果 |
+|---|---|
+| `npm run check` | 类型检查、32 项单元检查、3 份 TC 的 Chrome 正向与负向断言回归通过 |
+| `npm run desktop:check` | 29 项通过（含7个层级非法引用/重复子场景） |
+| 开发版 `npm run desktop:smoke` | 18 项通过，页面错误0 |
+| 最终 `.app` 的同组检查 | 18 项通过，应用PATH不含外部Node/npm |
+| Book / Section 实际批量播放 | Book按2个Section执行overview→catalog，7步；独立Section执行catalog，5步；opening捕获顺序与实际完成数吻合 |
+| 原生控制窗口 | 独立BrowserWindow与preload；暂停继续、停止、终态隐藏通过；受控浏览器DOM无`#ygd-toolbar` |
+| 自动显隐 | 在真实原生窗口上模拟powerMonitor/screen信号验证：活动显示、3秒空闲隐藏、活动再显示；未把模拟活动当作实体输入证明 |
+| 全局快捷键 | `CommandOrControl+Alt+P`注册成功，并通过真实globalShortcut注册表查询；详见未验证项 |
+| 艺工实际Book | 最终应用包中12/12通过（加速0.2），课程摘要未改变，业务写入0 |
+| Skill 0.4.0 | 随包安装、修改冲突与备份恢复核验通过；文档引用与Skill validator通过 |
+
+18项检查保留原来的断言失败停步、只读源文件SHA256、启动版本冻结、single-run跨历史保护和Skill安装备份。新清单仍保留在艺工业务仓库，产品只包含合成样例。
+
+## 轮次与限制
+
+首轮双窗口验收误将隐藏控制窗口识别为主窗口，未找到项目页。修正验收窗口识别并明确原生窗口标题后取得上述18项通过。原始失败证据保留在`artifacts/v02-desktop-smoke-1792575182304/`；通过记录为`artifacts/v02-desktop-smoke-1792575258112/`及`artifacts/v02-packaged-smoke-1792575367516/`。艺工新Book证据在`artifacts/v02-yigong-book/`，详细业务截图另存业务仓库被忽略的证据目录。
+
+系统热键已注册，但两轮通过当前UI自动化发送组合键未取得播放触发证据：首轮超时，第二轮复核注册和选择后仍未触发，随后关闭隔离会话。记录保留于`artifacts/v02-native-system-input/`及`artifacts/v02-native-system-input-round2/`，不列为通过。**实体键盘的全局播放/暂停及真实鼠标键盘活动显隐仍待人工确认。**
+
+尚未新增其他操作系统、Intel Mac、多显示器全屏、干净机器、签名或公证验收。前一版历史结果保留如下，不改写。
+
+---
+
 # 桌面 v0.1 验证记录
 
 日期：2026-10-21。范围为 macOS Apple Silicon 本机、Electron 45.0.0、Playwright 1.58.2、已安装的 Google Chrome。开发宿主 Node.js 26；桌面播放在 Electron utilityProcess 内执行。

@@ -12,7 +12,7 @@
 2. 按可解释的业务步骤分组，标题与说明描述用途、即将执行的动作和结果。每步定位目标是演示辅助，不执行动作。
 3. 原 TC 入口保留 fixture、hooks、test.use、project 和清理，改用共享流程或新增适配 TC 对照运行。保留原有超时、重试、serial、skip/fixme、expected failure 等适用语义。
 4. 用 `defineProfile` 实际适配演示所需 baseURL、会话/角色、数据构造与释放，复用合适的 helpers。prepare 接收 page/workspaceDir/parameters 并返回 context 与必要的 release，准备失败自行清理自身 hooks；配置从 workspaceDir 解析。
-5. 在业务工作区 `.playbook.json` 注册 Profile 和脚本，按需组合 demos；不要将这些业务资产写入产品目录。不能直接运行的 TC-only 依赖给出最小适配缺口，不用 TODO 空壳宣称就绪。
+5. 在业务项目 `.playbook.json` 注册 Profile 和脚本，按需加入 books → sections → scripts 编排；不复制业务动作。Book/Section 批量播放使用同一选定 Profile，每个脚本独立 prepare/release。不要将这些业务资产写入产品目录。不能直接运行的 TC-only 依赖给出最小适配缺口，不用 TODO 空壳宣称就绪。
 
 不要把全部 beforeEach 搬进每一步，也不要把 afterEach 的数据库删除复制为客户演示结束动作。准备逻辑可以另写演示适配器，但原语义与新环境差异必须可审查。
 

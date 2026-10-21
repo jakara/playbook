@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.1，脚本 `schemaVersion: 1`，随包 Skill 当前为 0.3.0。本文依据当前实现说明能力与边界；实际验收结果见 [verification.md](verification.md)。
+日期：2026-10-21。客户端 v0.2，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.4.0。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -8,7 +8,9 @@
 flowchart LR
   Agent[用户自己的智能体 + Playbook Skill] -->|创作与维护| Assets[业务仓库：清单、脚本、Profile]
   Assets -->|静态只读发现| Main[Electron 主进程]
-  UI[React 资料库与播放界面] <-->|受限 preload IPC| Main
+  UI[React 项目与播放界面] <-->|受限 preload IPC| Main
+  Main <-->|进度与控制| HUD[原生透明置顶悬浮窗]
+  Input[系统空闲时间、鼠标坐标和全局快捷键] --> Main
   Main -->|构建本轮快照| Cache[应用用户数据目录]
   Main <-->|命令与状态| Runner[utilityProcess 运行器]
   Cache --> Runner
@@ -24,13 +26,14 @@ flowchart LR
 
 | 模块 | 当前职责 | 写入边界 |
 |---|---|---|
-| 用户智能体 + Skill | 需求引导、脚本创建/维护、讲解与效果调整、组合演示、测试转换和修复 | 用户的创作环境维护业务资产 |
-| `ui/` | 资料库、搜索、详情、已有环境选择、播放控制、记录与安装页 | 无业务文件写入 API |
+| 用户智能体 + Skill | 需求引导、脚本创建/维护、讲解与效果调整、Book/Section 编排、测试转换和修复 | 用户的创作环境维护业务资产 |
+| `ui/` | 项目、Book/Section/脚本浏览、搜索、详情、已有环境选择、播放控制、记录与安装页 | 无业务文件写入 API |
 | `desktop/preload.cjs` | 有限的 `window.playbook` 方法与完整状态订阅 | 不暴露任意文件系统、`ipcRenderer` 或代码执行接口 |
-| `desktop/main.mjs` | 项目登记、重新发现、选择校验、构建调度、运行器生命周期、记录与剪贴板 | 应用设置、备份、记录、缓存与显式 Skill 安装 |
+| `desktop/main.mjs` | 项目登记、重新发现、选择校验、构建调度、运行器生命周期、原生悬浮窗、活动检测、系统快捷键、记录与剪贴板 | 应用设置、备份、记录、缓存与显式 Skill 安装 |
+| `desktop/playback-control.mjs` | 原生悬浮窗生命周期、位置、活动显隐与受限控制状态 | 不写业务资产或记录按键内容 |
 | `desktop/library.mjs` | 路径校验、静态 TS 元数据、清单引用、环境选择和 esbuild 快照 | 构建产物写应用缓存 |
 | `desktop/runner.mjs` | 快照加载、Chrome、Profile、步骤调度、暂停/停止和事件 | 业务动作由可信脚本执行；管理自身临时资源 |
-| `desktop/presentation/` | 开场/章节、Driver.js 提示、蒙层、光圈、演示光标和浏览器内控制 | 本轮页面注入 |
+| `desktop/presentation/` | 开场/章节、Driver.js 提示、蒙层、光圈和演示光标 | 本轮页面注入；不注入进度条或播放控制 |
 | `desktop/skill-installer.mjs` | 预览、版本/摘要识别、备份、替换核验与失败恢复 | 选定的本 Skill 目录及应用备份 |
 | `src/index.ts` | 类型契约、`definePlaybook`、`defineProfile` 和测试复用参考执行器 | 业务准备与资源仍由调用者负责 |
 
@@ -40,7 +43,7 @@ flowchart LR
 
 业务文件是创作端和播放端的接口。智能体维护清单、TypeScript 脚本与 Profile；客户端没有编辑器、编排面板、聊天或模型账户，也不直接调用智能体。
 
-资料库按名称、摘要、清单标签和角色搜索，按项目、脚本/演示筛选。详情展示说明、步骤、数据类别、数据影响与重播要求；可选择已有 Profile、显示源文件位置或复制修改上下文。
+用户界面统一使用“项目”。一个项目对应含 `.playbook.json` 的已登记目录，API 中的 workspace 指同一对象，不存在另一份独立资料库。项目内按 Book → Section → 脚本组织，按名称、摘要、清单标签和角色搜索。详情展示内容顺序、说明、步骤、数据类别、数据影响与重播要求；可选择已有 Profile、显示源文件位置或复制修改上下文。
 
 反馈通过剪贴板交接，包含工作区、脚本/流程引用、运行状态、构建摘要和错误；用户自行粘贴给智能体。应用不自动发送任务消息或上传业务内容。
 
@@ -58,19 +61,26 @@ flowchart LR
   "scripts": [
     { "file": "demos/flows/course.playbook.ts", "profile": "training", "tags": ["教师", "课程"] }
   ],
-  "demos": [
-    { "id": "course-training", "title": "课程使用培训", "summary": "查看课程与预览任务", "scripts": ["course.preview"], "profile": "training" }
+  "books": [
+    {
+      "id": "course-training", "title": "课程使用培训", "summary": "查看课程与预览任务", "profile": "training",
+      "sections": [
+        { "id": "course-basics", "title": "课程入门", "summary": "从课程查找到任务预览", "scripts": ["course.preview"] }
+      ]
+    }
   ]
 }
 ```
 
-演示引用的脚本 ID 来自 TypeScript 默认导出。这是格式说明，不是产品提供的真实业务环境；可运行合成样例见 `examples/starter/`。
+Section 引用的脚本 ID 来自 TypeScript 默认导出。Book ID 在项目内唯一，Section ID 在所属 Book 内唯一，两者只使用 `[A-Za-z0-9._-]+`；Section 组合键为 `bookId/sectionId`。这是格式说明，不是产品提供的真实业务环境；可运行合成样例见 `examples/starter/`。
 
-发现过程会规范化项目根目录，要求资产为根目录内的可读文件，拒绝绝对或解析后越界的资产引用，并校验版本、重复标识及脚本/环境/演示引用。
+Book 和 Section 是引用与顺序容器，没有独立业务 callbacks。Book“播放全部”先按 sections 数组展开章节，再按各章 scripts 数组展开脚本；Section“播放全部”仅按自身 scripts 数组展开。单脚本仍可播放。旧 `demos: [{ id, title, summary?, scripts, profile? }]` 读取时归一为 Book 和单个 Section，兼容过程不回写原清单。
+
+发现过程会规范化项目根目录，要求资产为根目录内的可读文件，拒绝绝对或解析后越界的资产引用，并校验版本、重复标识及脚本/环境/Book/Section 引用。
 
 元数据由 TypeScript AST 静态读取，不 import 业务模块。当前支持默认导出的 literal 对象，或 `definePlaybook({ ... })` 的 literal 参数，允许 `as`/`satisfies` 包装；不解析变量引用、spread 和任意计算出的元数据。动作与断言仍是原生函数。
 
-无效脚本保留为不可播放条目；工作区与演示引用错误明确显示，不自动修复源码。当前没有“保留上一份完整有效索引”的缓存策略。
+无效脚本保留为不可播放条目；项目与容器引用错误明确显示，不自动修复源码。当前没有“保留上一份完整有效索引”的缓存策略。
 
 客户端约每 1.4 秒重新发现一次。清单、脚本、Profile 与有界遍历的本地 import 内容参与项目 token；这不是全文件系统监听，也未覆盖任意动态读取资产或全部依赖锁变化。标签来自 `scripts[].tags`。Profile 参数不传 Renderer；私密值应由业务侧私有文件或既有凭据机制提供。
 
@@ -86,7 +96,7 @@ flowchart LR
 
 ## 演示与测试入口
 
-桌面入口：选择脚本/组合与已有 Profile → 构建快照 → `utilityProcess` 加载 → 本机 Chrome → 每脚本准备上下文 → 引导、动作、断言 → 释放资源 → 记录结果。
+桌面入口：选择脚本、Section 或 Book 与已有 Profile → 按容器顺序展开脚本 → 构建快照 → `utilityProcess` 加载 → 本机 Chrome → 每脚本准备上下文 → 引导、动作、断言 → 释放资源 → 记录结果。
 
 测试入口继续使用原项目 Playwright Test 的 fixture、配置、报告和 teardown，通过 `runPlaybook`/`test.step` 复用同一流程，或由 Skill 导出独立 TC。
 
@@ -98,11 +108,13 @@ Profile 默认导出 `defineProfile({ ... })`，提供 `schemaVersion`、`id`、
 
 运行器校验脚本 schema、数据类别和所需角色。`reset-required` 要求 Profile 声明 `resetBeforeRun: true`；实际重置仍由 Profile 实现并验证，声明本身不会重置数据。`single-run` 在开始执行前持久化执行占用，避免直接重播已可能产生作用的流程；后续须先核对数据并完善恢复策略。
 
-组合演示按清单脚本 ID 串行运行，每个脚本重新创建页面并 prepare/release，不隐式共享前一个脚本的内存上下文。JSON 保存引用和顺序，动作与断言保留在 TypeScript。
+Book/Section 整次播放使用用户所选同一 Profile，每个脚本的数据模式与角色要求都必须兼容。它们按清单脚本 ID 串行运行，每个脚本重新创建页面并 prepare/release，不隐式共享前一个脚本的内存上下文。JSON 保存引用和顺序，动作与断言保留在 TypeScript。
 
 ## 播放控制与呈现
 
 Renderer 调用 `play({ workspaceId, entryId, kind, profileId })` 与 `control('pause' | 'resume' | 'stop')`。主进程按当前 runId 接收事件；`getState` 与 `onState` 提供完整状态。运行历史持久保存，界面只展示最近 100 条。
+
+`kind` 区分脚本、Section 和 Book；Section 的 entryId 使用组合键。主界面将当前选项与 Profile 同步给主进程，供空闲时全局播放键使用；播放仍经过同一选择、兼容性和重播策略校验。全局控制不绕过主进程运行状态。
 
 ```mermaid
 stateDiagram-v2
@@ -128,9 +140,17 @@ stateDiagram-v2
 
 当前支持脚本级光圈半径、蒙层透明度、光标移动时间、默认停留和开场时间，以及步骤级章节、方向、停留与操作后间隔；核心契约校验参数范围。
 
-暂停在说明计时、光标移动和步骤边界检查。进行中的业务动作先进入“正在暂停”，待边界后暂停，不撤回已发出的请求。停止中断后续调度并关闭本次 Chrome，主进程超时回收；已完成的业务写入不会自动回滚。终态可在客户端或浏览器结束页重播，仍经过数据策略校验。
+暂停在说明计时、光标移动和步骤边界检查。进行中的业务动作先进入“正在暂停”，待边界后暂停，不撤回已发出的请求。停止中断后续调度并关闭本次 Chrome，主进程超时回收；已完成的业务写入不会自动回滚。终态可从客户端重播，仍经过数据策略校验。
 
 成功、失败和停止均尝试 release。完成/失败页面可留在独立 Chrome 供查看，下一轮或退出时回收；停止会关闭本次浏览器。当前引导范围为单个主页面，跨窗口、frame、上传下载及系统对话框需单独适配验收。
+
+## 原生全局悬浮控制
+
+进度与控制由客户端的透明置顶 `BrowserWindow` 展示，独立于业务 Chrome 和页面 DOM。浏览器注入层只负责开场、箭头、蒙层、光圈等引导，不再包含下方进度条或播放控制按钮。原生悬浮窗接收主进程同一份运行状态，通过受限 IPC 发送控制命令，不在页面重复调度动作。
+
+主进程轮询 `powerMonitor` 的系统空闲时间与 `screen` 的鼠标坐标，检测鼠标/键盘活动；约 3 秒无活动隐藏，活动后显现。它不读取按键内容，不安装额外全局键盘 hook 依赖。显隐是客户端行为，不是脚本 presentation 配置；系统对空闲时间、置顶层和桌面空间的行为须按目标系统实测。
+
+`globalShortcut` 注册默认 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）。运行中切换播放/暂停，空闲时播放主界面当前选择，终态允许重播；动作仍遵守暂停边界、单运行器与重播策略。注册失败在客户端明确提示，退出时注销快捷键；不承诺永不冲突，也不把跨平台支持视为已通过验收。
 
 ## 内置 Skill 安装
 
@@ -165,7 +185,7 @@ stateDiagram-v2
 
 ## 后续路线与限制
 
-只读库、静态发现、快照、独立运行器、单页引导、组合演示、控制、反馈和两个框架 Skill 安装已有实现；通过范围以验收记录为准。
+当前功能包括只读项目、Book/Section 批量播放、静态发现、快照、独立运行器、单页引导、原生悬浮控制、系统快捷键、反馈和两个框架 Skill 安装；通过范围以验收记录为准。
 
 当前实测范围为 macOS Apple Silicon，未完成 Intel、Windows、Linux 或干净机器验收。当前包无签名、公证与自动更新。
 

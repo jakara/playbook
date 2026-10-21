@@ -6,6 +6,8 @@
 
 从 `.playbook.json` 的 Profile 引用与现有 tests 确认真实 setup/teardown。defineProfile 的 prepare(page/workspaceDir/parameters) 是演示适配，不自动成为测试 fixture；若复用其业务 helpers，保留真实配置、登录与释放语义。只有步骤而无已知测试环境入口时，交付适配代码与明确依赖；依赖未实现前不能标为可执行 TC。
 
+用户指定 Book 或 Section 时，先按清单顺序展开它所引用的脚本，再根据业务测试生命周期适配；`runPlaybook` 本身只接收单脚本。不要把容器当作含 run/verify 的脚本，也不要将桌面的每脚本 prepare/release 静默合并成共享页面的单个 TC。保留实际隔离要求与依赖，报告测试入口的对应关系。
+
 ## 独立模式
 
 用户要求脱离 Playbook 时，将每步 `run` 和 `verify` 按顺序展开到标准 `@playwright/test` 的 `test.step`，保留自由变量绑定、helper imports、fixture 和清理。移除演示呈现元数据及纯视觉等待，不删除实现业务时序所需的事件、导航和轮询。

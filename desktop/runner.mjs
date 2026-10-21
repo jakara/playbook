@@ -16,7 +16,7 @@ async function capture(name) {
   if (!config.captureDir) return;
   await mkdir(config.captureDir, { recursive: true });
   await page.screenshot({ path: path.join(config.captureDir, `${name}.png`) });
-  const details = await page.evaluate(() => ({ ...window.playbookGuide?.inspect(), arrow: Boolean(document.querySelector('.driver-popover-arrow')), rootParent: document.querySelector('#ygd-root')?.parentElement.tagName }));
+  const details = await page.evaluate(() => ({ ...window.playbookGuide?.inspect(), arrow: Boolean(document.querySelector('.driver-popover-arrow')), toolbarPresent: Boolean(document.querySelector('#ygd-toolbar')), rootParent: document.querySelector('#ygd-root')?.parentElement.tagName }));
   visualChecks.push({ name, ...details });
   await writeFile(path.join(config.captureDir, 'visual-checks.json'), JSON.stringify(visualChecks, null, 2));
 }
@@ -73,15 +73,12 @@ async function run(input) {
     const context = await browser.newContext({ viewport: config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
     const total = flows.reduce((count, flow) => count + flow.steps.length, 0);
     let completed = 0;
-    for (const flow of flows) {
+    for (const [flowIndex, flow] of flows.entries()) {
+      const segment = config.segments?.[flowIndex] || {};
       preparing = true;
       await checkpoint();
       if (page && !page.isClosed()) await page.close();
       page = await context.newPage(); page.setDefaultTimeout(15000);
-      await page.exposeFunction('playbookCommand', command => {
-        if (command === 'replay' && !running) return send({ type: 'replay' });
-        return commandHandler({ command });
-      });
       inOperation = true; change({ executing: true });
       const prepared = await profile.prepare({ page, workspaceDir: config.workspaceDir, parameters: config.parameters });
       if (!prepared?.context || prepared.context.page !== page) throw new Error('Profile 必须返回当前演示 page');
@@ -89,12 +86,12 @@ async function run(input) {
       await checkpoint(); await inject();
       const settings = { spotlightRadius: 105, overlayOpacity: .56, cursorMoveMs: 900, defaultHoldMs: 2600, openingMs: 2800, ...flow.presentation };
       await ui('configure', settings);
-      await ui('center', { eyebrow: `${config.dataMode === 'real' ? '实际服务' : config.dataMode === 'mock' ? '模拟接口' : '受控样例'} · Playbook`, title: flow.title, description: flow.summary, phase: 'playing' });
+      await ui('center', { eyebrow: `${segment.sectionTitle ? segment.sectionTitle + ' · ' : ''}${config.dataMode === 'real' ? '实际服务' : config.dataMode === 'mock' ? '模拟接口' : '受控样例'} · Playbook`, title: flow.title, description: flow.summary, phase: 'playing' });
       await capture(`opening-${flow.id}`);
-      current = { total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs);
+      current = { ...segment, total, completed, index: completed, stepTitle: flow.title }; await state(); await wait(settings.openingMs);
       let chapter;
       for (const step of flow.steps) {
-        await checkpoint(); current = { total, completed, index: completed + 1, stepId: step.id, stepTitle: step.title }; await state();
+        await checkpoint(); current = { ...segment, total, completed, index: completed + 1, stepId: step.id, stepTitle: step.title }; await state();
         await inject(); await ui('configure', settings);
         if (step.presentation?.chapter && step.presentation.chapter !== chapter) {
           chapter = step.presentation.chapter;
@@ -125,7 +122,7 @@ async function run(input) {
       if (release) { const cleanup = release; release = null; await cleanup(); }
     }
     await inject();
-    await ui('center', { eyebrow: '演示完成', title: '核心流程已演示完成', description: '每个步骤均已通过实际结果检查。\n你可以回到客户端查看运行记录，或从头再播放。', button: '再播放一遍', command: 'replay', phase: 'done' });
+    await ui('center', { eyebrow: '演示完成', title: '核心流程已演示完成', description: '每个步骤均已通过实际结果检查。\n你可以回到客户端查看运行记录，或从头再播放。', phase: 'done' });
     await capture('complete');
     finalUpdate = { state: 'completed', completed: total, index: total, total };
   } catch (error) {

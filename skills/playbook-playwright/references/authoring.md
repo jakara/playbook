@@ -31,7 +31,11 @@
 
 准备、登录、角色和清理由 `defineProfile` 及已有业务 helpers 提供。`prepare({ page, workspaceDir, parameters })` 读取工作区的实际配置，返回包含当前 page 的 context 和必要的 release；准备部分失败自行解绑自身 hooks。桌面负责创建和关闭浏览器/会话，Profile 不接管其生命周期。TC 继续沿用原 fixture，不把测试专用登录或数据库初始化静默变成客户现场逻辑。
 
-交付工作区根 `.playbook.json`，在 profiles 注册 Profile，在 scripts 注册文件、默认 Profile 和标签；可选 demos 按稳定流程 ID 组合。脚本与 Profile 数据模式保持一致，组合演示使用同一个 Profile。清单参数不存密码；私有配置相对 workspaceDir 解析，不复制到产品仓库。已有清单时做最小增量维护，不重写无关资产。
+交付项目根 `.playbook.json`，在 profiles 注册 Profile，在 scripts 注册文件、默认 Profile 和标签；用 books → sections → scripts 按稳定流程 ID 编排。Book 和 Section ID 使用字母、数字、点、下划线或连字符，Section 在 Book 内唯一。Book“播放全部”按章节和各章脚本的数组顺序执行，Section“播放全部”按自身脚本数组执行；容器不复制 run/verify。
+
+批量执行统一使用所选同一 Profile，脚本与 Profile 的数据模式、角色要求保持兼容。每个脚本独立准备与释放，不能把上个脚本创建的页面或内存变量当作下一脚本的前置条件；有业务依赖时由 Profile 或明确的持久数据条件提供。旧 demos 由客户端兼容读取为 Book/Section，不为接入新版本而擅自改写旧清单。
+
+清单参数不存密码；私有配置相对 workspaceDir 解析，不复制到产品仓库。已有清单时做最小增量维护，不重写无关资产。进度条、活动显隐和全局快捷键由客户端提供，脚本只描述页面引导与业务流程。
 
 ## 验证与交付
 
