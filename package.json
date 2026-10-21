@@ -3,20 +3,65 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Playbook script contract and reference executor; Electron application is planned",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "description": "Playbook desktop player and AI-native authoring skill",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check:examples": "tsc -p tsconfig.examples.json",
     "test:unit": "node --test tests/*.test.mjs",
     "test:examples": "playwright test -c examples/playwright.config.ts",
     "test:negative": "node tests/negative-check.mjs",
-    "check": "npm run build && npm run check:examples && npm run test:unit && npm run test:examples && npm run test:negative"
+    "check": "npm run build && npm run check:examples && npm run test:unit && npm run test:examples && npm run test:negative",
+    "start": "npm run desktop:build && electron .",
+    "desktop:build": "npm run build && node scripts/build-desktop.mjs",
+    "desktop:check": "node --test tests/desktop-*.test.mjs tests/skill-installer.test.mjs",
+    "desktop:smoke": "node scripts/desktop-smoke.mjs",
+    "package:mac": "npm run desktop:build && electron-builder --mac dir zip --arm64"
   },
-  "peerDependencies": { "@playwright/test": "1.58.2" },
   "devDependencies": {
-    "@playwright/test": "1.58.2",
     "@types/node": "24.0.0",
-    "typescript": "5.9.3"
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "vite": "8.3.5"
+  },
+  "main": "build/main.cjs",
+  "dependencies": {
+    "@playwright/test": "1.58.2",
+    "playwright": "1.58.2",
+    "driver.js": "1.10.2",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "build": {
+    "electronDist": "node_modules/electron/dist",
+    "appId": "com.playbook.desktop",
+    "productName": "Playbook",
+    "asar": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "build/**/*",
+      "dist/**/*",
+      "desktop/presentation/**/*",
+      "package.json",
+      "skills/**/*",
+      "examples/starter/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "identity": null,
+      "target": [
+        "zip"
+      ]
+    },
+    "npmRebuild": false
   }
 }

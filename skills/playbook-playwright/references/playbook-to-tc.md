@@ -4,7 +4,7 @@
 
 沿用业务已有的 `test` fixture、项目和配置，准备与脚本类型相匹配的 context，然后调用 `runPlaybook`，用 `test.step` 包裹每一步。不调用演示 beforeStep，不加载 Driver.js，不等待阅读停留或光标动画。
 
-从 Profile 或现有 tests 确认真实 setup/teardown。Playbook 只有步骤而无已知环境入口时，可生成语法有效的测试适配代码和明确依赖清单；依赖未实现前不能标为可执行 TC。
+从 `.playbook.json` 的 Profile 引用与现有 tests 确认真实 setup/teardown。defineProfile 的 prepare(page/workspaceDir/parameters) 是演示适配，不自动成为测试 fixture；若复用其业务 helpers，保留真实配置、登录与释放语义。只有步骤而无已知测试环境入口时，交付适配代码与明确依赖；依赖未实现前不能标为可执行 TC。
 
 ## 独立模式
 
@@ -12,7 +12,7 @@
 
 “独立”默认指 TC 不再依赖 Playbook SDK 或脚本，仍可引用原业务 fixture/helper。例如 `tests/exported/course.spec.ts` 继续从 `../fixtures.js` 导入项目的 test。不要仅为独立导出复制一份 fixture；只有明确要求可移植包或隔离验证无法引用原目录时才复制/提取所需文件，并记录来源和同步责任。用户要求单文件或脱离业务仓库分发时，另外核对所有依赖是否已实际打包，不把普通独立 TC 冒充自包含交付包。
 
-不要用 `Function.toString()` 或拼接源码猜闭包。动态步骤生成器、运行期分支、跨步骤状态和外部 helper 需要实际阅读并保留语义；无法独立展开的依赖保留为普通业务 helper，或报告为何仍依赖原实现。
+不要用 `Function.toString()` 或拼接源码猜闭包。桌面要求静态 literal steps，但 callbacks 内仍可有运行期分支、闭包、跨步骤状态和外部 helper；必须实际阅读并保留语义。旧资产的动态步骤生成器还需另行识别；无法独立展开的依赖保留为普通业务 helper，或报告为何仍依赖原实现。不承诺存在无损通用转换器。
 
 生成的独立 TC 标注来源文件、流程 ID/版本或可获取的 revision。它是快照，需要源脚本变更后重新生成或人工同步，不同时宣称两者仍为单一真源。
 
@@ -25,4 +25,4 @@
 
 ## 验证
 
-对比原流程与导出 TC 的关键动作与预期，运行类型检查与目标测试。能够安全构造失败时，改变 fixture 的预期输出，确认导出 TC 的业务断言也失败。不要通过放宽断言使两者表面通过。
+对比原流程与导出 TC 的关键动作与预期，运行独立类型检查与目标测试。`--check-workspace` 只为桌面资产做静态/引用/编译检查，不能证明导出 TC 类型正确或浏览器通过。能够安全构造失败时，改变 fixture 的预期输出，确认导出 TC 的业务断言也失败；不要通过放宽断言使两者表面通过。

@@ -1,0 +1,9 @@
+import { build } from 'esbuild';
+import { build as viteBuild } from 'vite';
+import { mkdir, copyFile } from 'node:fs/promises';
+import path from 'node:path';
+
+await mkdir('build', { recursive: true });
+await build({ entryPoints: { main: 'desktop/main.mjs', runner: 'desktop/runner.mjs' }, outdir: 'build', outExtension: { '.js': '.cjs' }, bundle: true, platform: 'node', format: 'cjs', target: 'node22', packages: 'external', sourcemap: true });
+await copyFile('desktop/preload.cjs', 'build/preload.cjs');
+await viteBuild({ root: path.resolve('ui'), base: './', build: { outDir: path.resolve('build/ui'), emptyOutDir: true } });

@@ -11,6 +11,7 @@ export interface PlaybookStep<C extends PlaybookContext> {
     chapter?: string;
     side?: 'top' | 'right' | 'bottom' | 'left';
     holdMs?: number;
+    afterMs?: number;
   };
   run: (context: C) => Promise<void>;
   verify: (context: C) => Promise<void>;
@@ -21,6 +22,13 @@ export interface Playbook<C extends PlaybookContext> {
   id: string;
   title: string;
   summary: string;
+  presentation?: {
+    spotlightRadius?: number;
+    overlayOpacity?: number;
+    cursorMoveMs?: number;
+    defaultHoldMs?: number;
+    openingMs?: number;
+  };
   source?: { testFile: string; testTitle: string; revision?: string };
   requirements: {
     dataMode: 'real' | 'fixture' | 'mock';
@@ -44,7 +52,30 @@ export function definePlaybook<C extends PlaybookContext>(book: Playbook<C>): Pl
     }
     ids.add(step.id);
   }
+  const bounds: Record<string, [number, number]> = { spotlightRadius: [40, 300], overlayOpacity: [0, .9], cursorMoveMs: [150, 5000], defaultHoldMs: [0, 60000], openingMs: [0, 30000], holdMs: [0, 60000], afterMs: [0, 60000] };
+  for (const values of [book.presentation, ...book.steps.map(step => step.presentation)]) {
+    for (const [key, value] of Object.entries(values || {})) {
+      const range = bounds[key];
+      if (range && (typeof value !== 'number' || !Number.isFinite(value) || value < range[0] || value > range[1])) throw new Error(`Invalid presentation value: ${key}`);
+    }
+  }
   return book;
+}
+
+export interface PlaybookProfile<C extends PlaybookContext> {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  dataMode: 'real' | 'fixture' | 'mock';
+  roles: readonly string[];
+  resetBeforeRun?: boolean;
+  prepare: (options: { page: Page; workspaceDir: string; parameters: Record<string, unknown> }) => Promise<{ context: C; release?: () => Promise<void> }>;
+}
+
+export function defineProfile<C extends PlaybookContext>(profile: PlaybookProfile<C>): PlaybookProfile<C> {
+  if (profile.schemaVersion !== 1 || !profile.id || !profile.title || !['real', 'fixture', 'mock'].includes(profile.dataMode)
+    || !Array.isArray(profile.roles) || typeof profile.prepare !== 'function') throw new Error('Invalid Playbook profile');
+  return profile;
 }
 
 export interface RunHooks<C extends PlaybookContext> {
@@ -53,7 +84,7 @@ export interface RunHooks<C extends PlaybookContext> {
   aroundStep?: (step: PlaybookStep<C>, execute: () => Promise<void>) => Promise<void>;
 }
 
-/** Reference executor, not the future interactive player or a security sandbox.
+/** Test/reference executor; the desktop runner supplies interactive presentation.
  * Setup/authentication and teardown remain in the caller's fixtures/profile.
  */
 export async function runPlaybook<C extends PlaybookContext>(

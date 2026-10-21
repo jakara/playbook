@@ -1,4 +1,51 @@
-# 本次验证记录
+# 桌面 v0.1 验证记录
+
+日期：2026-10-21。范围为 macOS Apple Silicon 本机、Electron 45.0.0、Playwright 1.58.2、已安装的 Google Chrome。开发宿主 Node.js 26；桌面播放在 Electron utilityProcess 内执行。
+
+## 开发版已执行
+
+| 检查 | 结果与边界 |
+|---|---|
+| `npm run desktop:build` | SDK、主进程、运行器、preload 和 React UI 构建通过 |
+| `npm run check` | 类型检查、20 项单元检查、原始 TC / 共享 Playbook TC / 独立导出 TC 的 3 项 Chrome 检查及负向断言检查通过 |
+| `npm run desktop:check`（修正后） | 17/17 通过，含外部工作区快照加载原生 Playwright expect 回归 |
+| `npm run desktop:smoke`（修正后） | 13 项端到端检查通过，页面错误 0；见下文 |
+| 内置 `--check-workspace`（艺工目录） | 静态元数据、引用和 bundle 通过；明确返回 typecheck/browser `not-run` |
+| 艺工真实本地工作区 | 12/12 步桌面回放完成；业务写入 0，课程完整对象摘要在末步与 Profile 释放时保持一致 |
+
+13 项桌面端到端检查为：工作区发现、搜索、暂停、启动版本冻结、完整 5 步回放、箭头/光圈/原生 dialog 层级、停止与重播、7 步组合演示、业务断言失败停在第 3 步、超过显示历史范围的 single-run 保护、业务源文件前后逐文件 SHA256 不变、Skill 首次安装、本地修改 Skill 经明确替换后可核验备份。
+
+合成检查使用隔离临时目录及无网络、无账号页面。Skill 只安装进临时业务目录，未修改实际用户的 Codex/Claude Code Skill。安装成功代表文件落盘并核验，不代表目标智能体已重新加载。业务示例保留在艺工仓库，产品内置样例为合成课程工作台。
+
+艺工检查连接既有本地业务服务，走本地模拟统一身份和既有受控教师身份，回放节奏为正常时间的 0.2 倍。随后从最终 `Playbook.app` 以正常节奏再次完整通过 12 步，12 个目标箭头与光圈同步、dialog 层级均通过，末步及释放时再次核对写入 0 与课程摘要一致。它不是正式学校 SSO、采购终验或客户现场证明。业务暂停/重播操作未在该工作区另行逐项复验；这些控制已在合成工作区验证。
+
+## 已发现与修复
+
+保留各轮本机原始证据，不把早期失败改写为通过：
+
+- round1：验收脚本未规范 `/var` 与 `/private/var` 路径；修正规范路径，并按规范工作区 ID 去重。
+- round2：快照将 Playwright CommonJS 入口当作 ESM 导入，导致准备失败；改用原生 ESM 入口，增加外部目录实际 import 回归。
+- round3：鼠标坐标传参形状不一致，导致光圈坐标无效；修正后用真实页面校验光标与蒙层孔洞坐标相等。
+- round4：测试对安装页重复标签定位不唯一；精确定位后继续通过。
+- round5：已有 12 项通过；独立审查发现运行页面步骤受源文件更新影响，以及 single-run 会随 100 条历史截断失效。保存运行步骤快照，保留全部执行记录（UI 只展示近 100 条），在启动前持久化执行标记，并新增检查；最终 13 项通过。
+
+本机证据位于被忽略的 `artifacts/desktop-smoke-round1` 至 `round5`、`artifacts/desktop-smoke/`、`artifacts/yigong-desktop/`，不上传登录信息或临时项目路径。Electron 原生二进制下载遇到网络问题后，从官方发布下载并核验 npm 包内的 SHA256 后安装，未修改 Electron 依赖源码。
+
+## 安装包验证
+
+`npm run package:mac` 已生成 `release/mac-arm64/Playbook.app` 和 `release/Playbook-0.1.0-arm64-mac.zip`。随后直接使用包内可执行文件运行同一组桌面端到端检查，最终版 **13/13 通过**、页面错误 0；Skill 安装与备份使用随包最终 Skill 0.3.0。
+
+包内检查时将应用 PATH 限制为 `/usr/bin:/bin:/usr/sbin:/sbin`，不含本机 Node/npm 安装路径；脚本编译、Chrome 播放及安装仍通过。这证明本机包内运行无需外部 Node/npm，不代表已在干净机器验收。证据为被忽略的 `artifacts/packaged-smoke/`，初版包检查另存 `artifacts/packaged-smoke-initial/`。
+
+最终应用包还以正常节奏完成艺工真实本地 12 步回放（`artifacts/yigong-packaged/`，详细业务证据另存艺工 `demos/guided-replay/artifacts/playbook-packaged/`）。应用携带依赖，浏览器仍使用已安装的 Chrome。未配置签名、公证或自动更新；不把可直接启动等同于通过 Gatekeeper 分发或其他机器兼容性验收。
+
+## 实际限制
+
+尚未验证干净机器、Intel Mac、Windows/Linux、正式学校身份、客户环境数据恢复、多页面/frame 演示。当前没有应用签名、公证或自动更新。播放可信的本地 TypeScript，会执行其 Profile 与业务代码；客户端的只读资产管理和声明的 `read-only` 不构成脚本安全沙箱。普通播放不自动截图；本轮截图仅由明确的验收环境开关生成。
+
+---
+
+# 早期契约与方案验证记录
 
 日期：2026-10-21。范围为本仓库 v0.1 契约、转换示例与 Skill，不是 Electron 产品验收。
 

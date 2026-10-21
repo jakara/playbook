@@ -21,7 +21,7 @@
 
 ## 生成流程
 
-按当前契约生成 `.playbook.ts`：稳定的流程/步骤 ID、业务标题、summary、dataMode/effects/replay/roles、目标 Locator、原生 run 与有意义的 verify。无 TC 来源时省略 source，不虚构原测试或版本。
+按当前契约生成 `.playbook.ts`：静态 default definePlaybook 对象、literal steps、稳定的流程/步骤 ID、业务标题、summary、dataMode/effects/replay/roles、目标 Locator、原生 run 与有意义的 verify。无 TC 来源时省略 source，不虚构原测试或版本。动态业务逻辑留在 callbacks/helpers 中，不能动态生成用于桌面发现的元数据。
 
 把观众与执行身份分开：教师培训可以是面向教师的文案，但不自动表示页面需要 teacher 权限。requirements.roles 只声明实际执行需要由 Profile 绑定的身份角色；无需认证的合成页面使用空数组，观众写在 title/summary/explain。
 
@@ -29,12 +29,12 @@
 
 按观众能理解的业务节奏组织步骤：本章目标 → 控件用途与接下来的动作 → 原生操作 → 实际结果。只看结果的步骤可使用没有业务副作用的 run 并配有效 verify；不能用空 verify 或单纯“等待几秒”表示结果成功。
 
-准备、登录、角色和清理由现有 fixture/Profile 提供。v0.1 SDK 没有正式 Profile/发现清单加载器；可复用真实 helper，或在授权范围内实现可执行适配。不能生成未实现的 defineProfile 等 API。若没有播放器，只验证代码和业务入口，不宣称中央开场或蒙层已实际展示。
+准备、登录、角色和清理由 `defineProfile` 及已有业务 helpers 提供。`prepare({ page, workspaceDir, parameters })` 读取工作区的实际配置，返回包含当前 page 的 context 和必要的 release；准备部分失败自行解绑自身 hooks。桌面负责创建和关闭浏览器/会话，Profile 不接管其生命周期。TC 继续沿用原 fixture，不把测试专用登录或数据库初始化静默变成客户现场逻辑。
 
-已有发现清单/演示配置时维护其实际格式与引用。没有已发布格式时交付可运行的当前契约脚本和适配说明，明确客户端接入待补；不要为看似完整额外发明 JSON 协议。
+交付工作区根 `.playbook.json`，在 profiles 注册 Profile，在 scripts 注册文件、默认 Profile 和标签；可选 demos 按稳定流程 ID 组合。脚本与 Profile 数据模式保持一致，组合演示使用同一个 Profile。清单参数不存密码；私有配置相对 workspaceDir 解析，不复制到产品仓库。已有清单时做最小增量维护，不重写无关资产。
 
 ## 验证与交付
 
-按已有项目方式做类型/语法检查，在已授权环境执行真实入口，核对关键状态。UI 操作新写入时至少验证核心结果与失败传播；仅改变讲解和元数据时按实际影响验证，不机械跑无关测试。
+先按业务项目方式做类型检查，再通过 Playbook `--check-workspace` 核对静态元数据、引用和编译；后者不执行 typecheck 或浏览器。具备已授权环境时实际播放并核对关键状态和呈现。UI 操作新写入时至少验证核心结果与失败传播；仅改讲解和元数据时按影响验证，不机械跑无关测试。
 
-回报所生成的资产、采用的假设、准备/运行方式、dataMode 与业务副作用、已验证/尚未验证内容。用户应能在客户端实现接入后直接发现并播放文件，无需再手工编辑应用内部数据库。
+回报清单、脚本、Profile、假设、准备/运行方式、dataMode 与业务副作用、已验证/尚未验证内容。用户从桌面添加含清单的工作区即可发现资产；环境或视觉尚未运行时明确说明，不以静态发现成功代替可播放结论。
