@@ -18,7 +18,7 @@ manifest.books = [{ id: 'teacher-training', title: '教师首次使用培训', s
   { id: 'courses', title: '课程与任务', scripts: ['starter.catalog'] },
 ] }];
 await writeFile(manifestFile, JSON.stringify(manifest, null, 2));
-const output = path.join(root, 'artifacts', `${process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'v02-packaged-smoke' : 'v02-desktop-smoke'}-${Date.now()}`); await mkdir(output, { recursive: true });
+const output = path.join(root, 'artifacts', `${process.env.PLAYBOOK_PACKAGED_EXECUTABLE ? 'v021-packaged-smoke' : 'v021-desktop-smoke'}-${Date.now()}`); await mkdir(output, { recursive: true });
 await mkdir(userData, { recursive: true });
 // The single-run record must survive beyond the UI's recent 100 rows.
 await writeFile(path.join(userData, 'runs.json'), JSON.stringify([
@@ -65,7 +65,7 @@ try {
     if (!page) await sleep(50);
   }
   assert.ok(page, 'Main project window must exist'); page.on('pageerror', error => errors.push(error.message));
-  await page.getByRole('heading', { name: '项目', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Book', exact: true }).waitFor();
   const initial = await state(), workspace = initial.workspaces.find(item => item.path === project);
   assert.ok(workspace && workspace.items.every(item => item.valid));
   assert.equal(workspace.items.length, 2); assert.equal(workspace.books.length, 1);
@@ -77,11 +77,32 @@ try {
   await page.getByLabel('筛选项目').selectOption(workspace.id);
   const search = page.getByRole('textbox', { name: '搜索 Book、Section、脚本、标签或角色' });
   await search.fill('找不到的内容'); await expect(page.getByText('没有匹配的内容', { exact: true })).toBeVisible();
-  await search.fill('任务预览');
-  await expect(page.locator('.entry-card')).toHaveCount(1);
-  await expect(page.locator('.book-group')).toHaveCount(1);
-  await expect(page.locator('.section-group')).toHaveCount(1); checks.search = true;
+  for (const query of ['任务预览', '课程与任务', '创作要求的查看方式']) {
+    await search.fill(query);
+    await expect(page.locator('.book-list-card')).toHaveCount(1);
+  }
+  await expect(page.locator('.section-group')).toHaveCount(0); checks.search = true;
   await search.fill('');
+  await expect(page.locator('.book-detail-page')).toHaveCount(0);
+  await page.screenshot({ path: path.join(output, '00-book-list.png') }); checks.listFirst = true;
+  await page.getByRole('button', { name: '查看 Book 教师首次使用培训', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '认识工作台', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: '课程与任务', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '课程与任务', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: '课程与任务', exact: true }).press('ArrowLeft');
+  await expect(page.getByRole('tab', { name: '认识工作台', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: '认识工作台', exact: true }).press('ArrowRight');
+  await expect(page.getByRole('tab', { name: '课程与任务', exact: true })).toHaveAttribute('aria-selected', 'true'); checks.sectionTabs = true;
+  const detailBounds = await page.locator('.book-detail-page').boundingBox(), contentBounds = await page.locator('.main-shell').boundingBox();
+  assert.ok(detailBounds.width / contentBounds.width > .85);
+  const sidebarBounds = await page.locator('.sidebar').boundingBox(); assert.ok(sidebarBounds.width <= 200);
+  await expect(page.locator('[role=tree] [role=group] [role=group]')).toHaveCount(0);
+  await expect(page.locator('.library-split')).toHaveCount(0); checks.folderBookTree = true;
+  await page.screenshot({ path: path.join(output, '01-book-tabs.png') });
+  await page.getByRole('button', { name: '返回 Book 列表', exact: true }).click();
+  await expect(page.locator('.book-detail-page')).toHaveCount(0); checks.returnToList = true;
+  await page.getByRole('button', { name: '查看 Book 教师首次使用培训', exact: true }).click();
+  await page.getByRole('tab', { name: '课程与任务', exact: true }).click();
   await page.getByRole('button', { name: '查看脚本 查找课程并预览课堂任务', exact: true }).click();
   await page.screenshot({ path: path.join(output, '01-library.png') });
   await page.getByRole('button', { name: '播放脚本', exact: true }).click();
@@ -101,12 +122,25 @@ try {
   await native.getByRole('button', { name: '暂停播放', exact: true }).click();
   const paused = await until(value => value.activeRun?.state === 'paused');
   await sleep(350); assert.equal((await state()).activeRun.completed, paused.activeRun.completed); checks.pause = true;
+  await native.getByRole('button', { name: '最小化播放栏', exact: true }).click();
+  await until(value => value.playbackControl?.collapsed === true);
+  const collapsedBounds = await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制').getBounds());
+  assert.ok(collapsedBounds.width <= 320);
+  await launched.evaluate(({ BrowserWindow }) => { const win = BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制'); const bounds = win.getBounds(); win.setPosition(Math.max(20, bounds.x - 100), Math.max(40, bounds.y - 150)); });
+  await sleep(350);
+  const movedBounds = await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制').getBounds());
+  await sleep(450);
+  assert.deepEqual(await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制').getBounds()), movedBounds); checks.controlPositionPreserved = true;
+  await native.screenshot({ path: path.join(output, '02-minimized-control.png') }); checks.minimizedControl = true;
   await setIdle(10);
   await until(value => value.playbackControl?.visible === false, 8000);
   assert.equal(await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制')?.isVisible()), false);
   await setIdle(0);
   await until(value => value.playbackControl?.visible === true, 8000);
   assert.equal(await launched.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'Playbook 播放控制')?.isVisible()), true);
+  assert.equal((await state()).playbackControl.collapsed, true);
+  await native.getByRole('button', { name: '展开播放栏', exact: true }).click();
+  await until(value => value.playbackControl?.collapsed === false);
   await native.screenshot({ path: path.join(output, '02-native-playback-control.png') });
   checks.nativeOverlayActivity = true;
   const flowFile = path.join(project, 'flows/catalog.playbook.ts'), originalFlow = await readFile(flowFile, 'utf8');
@@ -138,6 +172,8 @@ try {
   await native.getByRole('button', { name: '停止播放', exact: true }).click();
   await until(value => value.activeRun?.state === 'stopped'); checks.stopReplay = true;
   await page.getByRole('button', { name: '项目', exact: true }).click();
+  await page.getByRole('button', { name: '查看 Book 教师首次使用培训', exact: true }).click();
+  await page.getByRole('tab', { name: '课程与任务', exact: true }).click();
   await page.getByRole('button', { name: '播放整个 Section 课程与任务', exact: true }).click();
   const section = await until(value => ['completed', 'failed'].includes(value.activeRun?.state) && value.activeRun?.kind === 'section', 45000);
   assert.equal(section.activeRun.state, 'completed', section.activeRun.error); assert.equal(section.activeRun.completed, 5);

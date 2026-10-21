@@ -8,7 +8,7 @@ const send = message => process.parentPort ? process.parentPort.postMessage(mess
 const receive = callback => process.parentPort ? process.parentPort.on('message', event => callback(event.data)) : process.on('message', callback);
 const change = update => send({ type: 'state', update });
 class Stopped extends Error {}
-let browser, page, running = false, stopped = false, paused = false, inOperation = false, closing = false;
+let browser, page, running = false, stopped = false, paused = false, inOperation = false, closing = false, pauseVersion = 0;
 let position = { x: 900, y: 600 }, current = {}, config;
 const visualChecks = [];
 
@@ -23,6 +23,20 @@ async function capture(name) {
 
 async function ui(method, value) {
   if (page && !page.isClosed()) await page.evaluate(({ method, value }) => window.playbookGuide?.[method](value), { method, value });
+}
+async function foreground() {
+  if (!page || page.isClosed()) return;
+  if (!config.headless) {
+    let session;
+    try {
+      session = await page.context().newCDPSession(page);
+      const { windowId } = await session.send('Browser.getWindowForTarget');
+      const { bounds } = await session.send('Browser.getWindowBounds', { windowId });
+      if (bounds.windowState === 'minimized') await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } });
+    } catch { /* BringToFront remains available when native bounds are unsupported. */ }
+    finally { await session?.detach().catch(() => {}); }
+  }
+  await page.bringToFront();
 }
 async function state() {
   const phase = stopped ? 'stopping' : paused ? inOperation ? 'pausing' : 'paused' : 'playing';
@@ -58,7 +72,7 @@ async function moveTo(target, duration) {
   }
 }
 async function run(input) {
-  config = input; running = true; stopped = false; paused = false;
+  config = input; running = true; stopped = false; paused = Boolean(input.paused); pauseVersion = 0;
   let release, preparing = true, finalUpdate;
   try {
     const { flows, profile } = await import(pathToFileURL(config.bundle).href);
@@ -142,9 +156,14 @@ async function run(input) {
 }
 async function commandHandler({ command, config: input }) {
   if (command === 'start' && !running) { void run(input); return; }
-  if (command === 'pause' && running) { paused = true; await state(); }
-  if (command === 'resume' && running) { paused = false; await state(); }
-  if (command === 'stop') { stopped = true; paused = false; await state(); setTimeout(() => browser?.close().catch(() => {}), 1800).unref(); }
-  if (command === 'close') { closing = true; stopped = true; paused = false; await browser?.close().catch(() => {}); if (!running) process.exit(0); }
+  if (command === 'pause' && running) { pauseVersion++; paused = true; await state(); }
+  if (command === 'resume' && running) {
+    const requested = ++pauseVersion;
+    try { await foreground(); }
+    catch { change({ warning: '演示窗口未能置前，请检查受控浏览器窗口。' }); }
+    if (requested === pauseVersion && !stopped && !closing) { paused = false; await state(); }
+  }
+  if (command === 'stop') { pauseVersion++; stopped = true; paused = false; await state(); setTimeout(() => browser?.close().catch(() => {}), 1800).unref(); }
+  if (command === 'close') { pauseVersion++; closing = true; stopped = true; paused = false; await browser?.close().catch(() => {}); if (!running) process.exit(0); }
 }
 receive(message => void commandHandler(message));

@@ -29,9 +29,17 @@ try {
   const kind = process.argv[4] || 'script';
   const entry = kind === 'book' ? project.books[0] : project.items[0];
   await page.getByLabel('筛选项目', { exact: true }).selectOption(project.id);
+  if (kind === 'script') {
+    const book = project.books.find(book => book.sections.some(section => section.scripts.includes(entry.id)));
+    if (book) {
+      await page.getByRole('button', { name: `查看 Book ${book.title}`, exact: true }).click();
+      const section = book.sections.find(section => section.scripts.includes(entry.id));
+      await page.getByRole('tab', { name: section.title, exact: true }).click();
+    }
+  }
   await page.getByRole('button', { name: `查看${kind === 'book' ? ' Book' : '脚本'} ${entry.title}`, exact: true }).click();
   await page.screenshot({ path: path.join(output, 'library.png') });
-  await page.getByRole('button', { name: kind === 'book' ? `播放全部 Book ${entry.title}` : '播放脚本', exact: true }).click();
+  await page.getByRole('button', { name: kind === 'book' ? `播放整个 Book ${entry.title}` : '播放脚本', exact: true }).click();
   let result;
   for (let attempt = 0; attempt < 480; attempt++) {
     result = (await state()).activeRun;

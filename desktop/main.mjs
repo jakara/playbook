@@ -16,7 +16,7 @@ const skillDir = path.join(appRoot, 'skills/playbook-playwright');
 const skillVersion = '0.4.0';
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshBusy = false;
-let playbackControl, playbackSelection;
+let playbackControl, playbackSelection, controlIntent;
 const shortcut = { accelerator: 'CommandOrControl+Alt+P', label: process.platform === 'darwin' ? '⌘⌥P' : 'Ctrl+Alt+P', registered: false };
 const settingsFile = path.join(dataDir, 'settings.json');
 const runsFile = path.join(dataDir, 'runs.json');
@@ -65,7 +65,10 @@ async function refresh() {
 async function record(update) {
   if (!activeRun) return;
   Object.assign(activeRun, update);
-  if (terminal(activeRun.state)) activeRun.finishedAt ||= new Date().toISOString();
+  if (terminal(activeRun.state)) {
+    activeRun.finishedAt ||= new Date().toISOString();
+    if (controlIntent?.runId === activeRun.id) controlIntent = null;
+  }
   // Retain all durable records: single-run protection must outlive the UI's 100-row view.
   runs = [structuredClone(activeRun), ...runs.filter(run => run.id !== activeRun.id)];
   publish();
@@ -92,19 +95,26 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
       profileName: selected.profile.title, state: 'preparing', total: selected.items.reduce((sum, item) => sum + item.steps.length, 0),
       index: 0, completed: 0, startedAt: new Date().toISOString(), sourceToken: workspace.token, sourceChanged: false, flowIds: selected.items.map(item => item.id),
       steps: selected.items.flatMap(item => item.steps.map(step => ({ ...step, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle }))) };
+    const intent = { runId: activeRun.id, paused: false, stopped: false, ready: false };
+    controlIntent = intent;
     await record({});
     try {
       const outputDir = path.join(dataDir, 'cache', activeRun.id);
       const built = await snapshot({ workspace, ...selected, outputDir, appRoot });
       const latest = await readWorkspace(workspace.path);
       if (latest.token !== workspace.token) throw new Error('脚本正在更新，请刷新后再播放');
+      if (intent.stopped) { await record({ state: 'stopped' }); return { runId: intent.runId }; }
       activeRun.snapshotHash = built.snapshotHash;
       const runId = activeRun.id;
       const child = utilityProcess.fork(path.join(appRoot, 'build/runner.cjs'), [], { cwd: outputDir, stdio: 'pipe', serviceName: 'Playbook 演示运行器' });
       worker = child;
       child.on('message', async message => {
         if (activeRun?.id !== runId) return;
-        if (message.type === 'state') await record(message.update);
+        if (message.type === 'state' && !terminal(activeRun.state)) {
+          const update = { ...message.update };
+          if (intent.stopped && !terminal(update.state)) update.state = 'stopping';
+          await record(update);
+        }
         if (message.type === 'replay' && terminal(activeRun.state)) {
           void play({ workspaceId, entryId, kind, profileId: selected.profile.id }).catch(error => record({ state: 'failed', error: safeError(error) }));
         }
@@ -116,14 +126,19 @@ async function play({ workspaceId, entryId, kind = 'script', profileId }) {
       child.stdout?.resume(); child.stderr?.resume();
       // Commit the execution claim before any profile or business code can start.
       await record({ executing: true });
+      if (intent.stopped) { await disposeWorker(); await record({ state: 'stopped' }); return { runId }; }
       child.postMessage({ command: 'start', config: { ...built, appRoot, runId, title: selected.title,
         segments: selected.items.map(item => ({ flowId: item.id, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle })),
         profileId: selected.profile.id, dataMode: selected.profile.dataMode, parameters: selected.profile.parameters, workspaceDir: workspace.path,
         captureDir: process.env.PLAYBOOK_TEST_CAPTURE === '1' ? path.join(dataDir, 'evidence', runId) : null,
         pace: process.env.PLAYBOOK_TEST_PACE ? Math.max(.02, Number(process.env.PLAYBOOK_TEST_PACE)) : 1,
-        headless: process.env.PLAYBOOK_TEST_HEADLESS === '1' } });
+        headless: process.env.PLAYBOOK_TEST_HEADLESS === '1', paused: intent.paused } });
+      intent.ready = true;
       return { runId };
-    } catch (error) { await record({ state: 'failed', error: safeError(error) }); throw new Error(safeError(error)); }
+    } catch (error) {
+      if (intent.stopped) { await record({ state: 'stopped' }); return { runId: intent.runId }; }
+      await record({ state: 'failed', error: safeError(error) }); throw new Error(safeError(error));
+    }
   } finally { launchBusy = false; }
 }
 
@@ -143,7 +158,11 @@ function handle(name, action, allowControl = false) {
 
 async function control(command) {
   if (command === 'toggle') {
-    if (activeRun && !terminal(activeRun.state)) return control(activeRun.state === 'paused' ? 'resume' : 'pause');
+    if (activeRun && !terminal(activeRun.state)) {
+      if (activeRun.state === 'stopping') return;
+      const paused = controlIntent?.runId === activeRun.id ? controlIntent.paused : ['paused', 'pausing'].includes(activeRun.state);
+      return control(paused ? 'resume' : 'pause');
+    }
     const target = playbackSelection || (activeRun && { workspaceId: activeRun.workspaceId, entryId: activeRun.entryId, kind: activeRun.kind, profileId: activeRun.profileId });
     if (target) return play(target);
     window?.show(); return;
@@ -152,9 +171,18 @@ async function control(command) {
     if (!activeRun || !terminal(activeRun.state)) return;
     return play({ workspaceId: activeRun.workspaceId, entryId: activeRun.entryId, kind: activeRun.kind, profileId: activeRun.profileId });
   }
-  if (!['pause', 'resume', 'stop'].includes(command) || !worker || !activeRun || terminal(activeRun.state)) return;
-  worker.postMessage({ command });
+  if (!['pause', 'resume', 'stop'].includes(command) || !activeRun || terminal(activeRun.state) || activeRun.state === 'stopping') return;
+  const intent = controlIntent?.runId === activeRun.id ? controlIntent : (controlIntent = { runId: activeRun.id, paused: false, stopped: false, ready: Boolean(worker) });
+  if (command === 'pause' || command === 'resume') {
+    intent.paused = command === 'pause';
+    if (intent.ready && worker) worker.postMessage({ command });
+    if (intent.paused) await record({ state: 'pausing' });
+    else if (!intent.ready) await record({ state: 'preparing' });
+    return;
+  }
   if (command === 'stop') {
+    intent.stopped = true; intent.paused = false;
+    if (intent.ready && worker) worker.postMessage({ command });
     await record({ state: 'stopping' }); const runId = activeRun.id;
     setTimeout(() => { if (activeRun?.id === runId && activeRun.state === 'stopping') { void disposeWorker(); void record({ state: 'stopped' }); } }, 8000);
   }
@@ -190,6 +218,7 @@ app.whenReady().then(async () => {
   if (!shortcut.registered) shortcut.error = '快捷键未能注册，可能已被其他应用占用；仍可使用播放按钮。';
   handle('getState', () => viewState());
   handle('playbackState', () => playbackControl.state(), true);
+  handle('collapseControl', value => playbackControl.setCollapsed(value), true);
   handle('addWorkspace', async () => {
     const result = await dialog.showOpenDialog(window, { title: '选择包含 .playbook.json 的业务项目', properties: ['openDirectory'] });
     if (!result.canceled) { settings.roots = [...new Set([...settings.roots, result.filePaths[0]])]; await saveSettings(); await refresh(); }
