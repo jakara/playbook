@@ -17,13 +17,14 @@
     "test:examples": "playwright test -c examples/playwright.config.ts",
     "test:negative": "node tests/negative-check.mjs",
     "check": "npm run build && npm run check:examples && npm run test:unit && npm run test:examples && npm run test:negative",
-    "start": "npm run desktop:build && electron .",
+    "start": "npm run electron:install && npm run desktop:build && electron .",
     "desktop:build": "npm run build && node scripts/build-desktop.mjs",
     "desktop:check": "node --test tests/desktop-*.test.mjs tests/skill-installer.test.mjs",
-    "desktop:smoke": "node scripts/hybrid-smoke.mjs",
-    "package:mac": "npm run desktop:build && electron-builder --mac dir dmg zip --arm64",
+    "desktop:smoke": "npm run electron:install && node scripts/hybrid-smoke.mjs",
+    "package:mac": "npm run electron:install && npm run desktop:build && electron-builder --mac dir dmg zip --arm64 --publish never",
     "test:pptx": "node scripts/pptx-smoke.mjs",
-    "icons": "node scripts/build-icons.mjs"
+    "icons": "node scripts/build-icons.mjs",
+    "electron:install": "install-electron"
   },
   "devDependencies": {
     "@types/node": "24.0.0",

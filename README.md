@@ -87,6 +87,8 @@ npm ci
 npm start
 ```
 
+首次启动或打包时会按锁定版本下载 Electron 运行环境；Electron 45 的 npm 包不再靠安装后脚本完成下载。`npm run electron:install` 可单独补齐环境，应用打包显式使用 `--publish never`，发布由校验后的工作流完成。
+
 ```sh
 npm run desktop:build  # 构建客户端
 npm run check          # 核心、类型、样例与正反向检查
