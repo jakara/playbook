@@ -1,3 +1,172 @@
+# 自动构建与开源分发 · v0.7.0 / 基础 Skill 0.10.0
+
+日期：2026-10-24。本节记录本地验证；GitHub 构建/发布结果以对应 Actions 和 Release 为准。
+
+- 客户端、SDK 和 community-bootstrap 基础引导使用 MIT。完整专业 Skill 已逐文件复制、校验到本机 `.private/skills/`，未加入版本管理。公开两个调用名只提供安装与接入，不能取得专业版。旧公开 Git 历史保留，许可范围见 `LICENSE_SCOPE.md`。
+- 完整 `npm run check`：193 项自动检查，192 通过、1 平台跳过、0 失败；3 个示例 TC 通过，original/shared/standalone 三种入口都能拒绝刻意修改的业务预期。最终本地日志位于 `artifacts/release-0.7.0/local-check.log`。
+- 安装 fixture：旧兼容应用复用并执行下载的独立 CLI、首次安装、幂等重跑、完整/专业版本保护、明确替换与备份、本地修改/软链接保护、固定 tag、错误摘要和不安全 tar 拒绝；并发目标占用时保持用户目录且不嵌套写入应用。测试不写真实智能体配置。
+- 发布 fixture：新系列保留旧系列，同系列补丁先完整上传、核验、发布再删除较低补丁 Release；Git tags、draft 和 prerelease 保留。创建、上传、校验、发布或 tag 校验失败不会删除旧版；同版本普通推送不移动发布 tag。
+- 实际打包 Electron 客户端混合验证 **10/10**：内置浏览器、手动交接、倒计时、暂停/继续、停止与 release、Book 共享上下文、PPTX 手动流程拒绝、外部兼容、正常退出和强杀后的精确缓存恢复。证据 `artifacts/hybrid-1792849619452/result.json`。只使用隔离 fixture，未操作业务数据；未声称实体快捷键或原生选择器已被人操作验证。
+- 教程浏览器回放 **23/23**：同一 renderer 的更新教程及断言通过，证据 `artifacts/tutorial-browser-1792849701351/result.json`。此项不代替旁白时间、实体键盘或 native Electron 验收。
+- 最终 DMG 和 ZIP 已构建；只读挂载 DMG 核验应用版本、Bundle ID、图标及5个公开基础引导文件；不存在 `.private` 或专业 references，见 `artifacts/release-0.7.0/dmg-verification.json`。安装包尚未完成 Apple 签名/公证。
+
+上述本地证据与私有 Skill 不上传公开仓库；本轮没有新增付费模型 API 调用。
+
+# 所有项目与 Book 可删除 · v0.6.3 / Skill 0.9.2
+
+日期：2026-10-24。按用户要求取消内置教程和入门样例的不可删除限制，侧栏项目移出、Book 列表及详情删除均启用。所有条目使用同一入口和可取消确认框。此前版本的“内置保护”仅为历史行为，不再适用于当前版本。
+
+- 内置项目移出和 Book 删除保存为本机设置中的稳定标识；刷新、重启或应用安装目录变化不会自动恢复。随包清单、脚本和 Profile 保留，避免写入已打包应用。普通业务 Book 仍先备份并修改业务清单。运行记录、资源归属及清理策略保持原语义。
+- 本机设置写入前保留并核验备份，包括此前尚无 settings.json 时的初始状态。旧 schemaVersion 1 设置不需要迁移，新字段可选。明确重新添加内置项目可以恢复项目登记，已经删除的 Book 继续保持删除。
+- 删除确认说明内置条目的本机保存方式，随包 Skill 0.9.2 同步全部可删除与恢复边界。播放或待核对清理的状态约束继续适用，不通过删除跳过清理。
+
+验证：最终完整检查 **163 通过、1 项平台条件跳过**，SDK/样例类型检查、3 个 TC 及三种入口负向预期验证通过；新增测试覆盖删除状态跨安装目录与旧设置兼容。
+
+实际打包 Electron 验证 **7/7**：[结果](../artifacts/builtin-removal-1792843197879/result.json)。覆盖内置入口启用、取消无写入、Book 删除与初始设置备份逐字核验、项目移出后重启、明确重新添加且不恢复已删 Book、详情删除教程、两项目全部移出、真实应用目录复制后删除状态仍保留。原始随包清单前后逐字一致，没有启动演示 Profile 或业务动作。验证使用隔离用户数据，目录选择器返回受控，不声称实体选择器操作验收。
+
+普通项目管理回归 **10/10**：[结果](../artifacts/library-management-1792843196136/result.json)。保留普通 Book 清单备份、冲突保护、播放与清理约束、项目重启/重加及磁盘刷新行为。两入口 Skill validator、38 个引用及源码/应用/ZIP 校验见 [包核验](../artifacts/removal-2026-10-24/package-verification.json)。
+
+交付：[Playbook.app](../release/mac-arm64/Playbook.app)、[macOS arm64 ZIP](../release/Playbook-0.6.3-arm64-mac.zip)。没有改动用户真实配置或艺工数据，零新增付费模型调用，未提交或推送。本轮没有重跑完整教程或办公软件放映，以下历史记录保留原样。
+
+---
+
+# 统一书本与播放图标 · v0.6.2
+
+日期：2026-10-24。应用图标改为绿色圆角底的翻开书本，右页嵌入播放三角。侧栏品牌、Book 列表、空态、内置播放器标题及全局播放栏使用同一个图形源 `assets/playbook-mark.svg`，不改脚本接口或业务流程。随包 Skill 保持 0.9.1。
+
+新增 `npm run icons`，使用本机 Chrome 和 macOS sips/iconutil 从矢量源生成 1024px PNG 与十种尺寸的 ICNS。打包配置指向该 ICNS，不再使用默认 Electron 图标；应用内由共用组件读取同一矢量图形。图形制作未调用生成式模型或云服务。
+
+- 最终 `npm run check`：**162 通过、1 项平台条件跳过**，SDK/样例类型检查、3 个 TC 和三入口负向预期验证通过。没有为低风险图标替换添加复述实现的单元测试。
+- 最终打包应用实际启动、导航与图标显示通过，无页面错误。已查看主页、Book 详情、侧栏、播放栏与 16/32/64/128px 图形预览：[结果](../artifacts/icons-2026-10-24/final2/result.json)、[主页](../artifacts/icons-2026-10-24/final2/home.png)、[大小预览](../artifacts/icons-2026-10-24/final2/sizes.png)。
+- 实际应用 Info.plist 指向 icon.icns，与源文件字节一致；系统 iconutil/sips 成功解码十种表示：[原生资源核验](../artifacts/icons-2026-10-24/native-icon-check.json)。源码/应用/ZIP 及 SHA-256 核对见 [包核验](../artifacts/icons-2026-10-24/package-verification.json)。
+- 早期辅助探针调用 Electron getFileIcon 时进程出现 SIGTRAP；后续一次附加 Dock 设置的启动也未在预算内得到窗口，已保留两轮失败结果与日志。最终移除额外 Dock 设置，使用应用包原生图标，重新打包并完成上述真实应用验证。未将图标查询探针、Finder 缓存或 Dock 实体交互记为通过；没有修改系统图标缓存。早期失败在同目录 result.json 和 final/result.json，最终通过在 final2/result.json。
+- 本轮为图形与打包变更，没有重跑全部业务生命周期或完整教程；此前记录保留。没有操作艺工真实业务数据或用户应用配置，未提交、未推送。
+
+交付：[Playbook.app](../release/mac-arm64/Playbook.app)、[macOS arm64 ZIP](../release/Playbook-0.6.2-arm64-mac.zip)。以下历史记录保持原样。
+
+---
+
+# 项目移出、Book 删除与磁盘刷新 · v0.6.1 / Skill 0.9.1
+
+日期：2026-10-24。在现有未提交修改上增量实现，没有回退版本、提交或推送；没有操作艺工真实业务文件、数据或本机真实应用配置。测试的设置、项目和运行记录均位于隔离临时目录。
+
+- 左侧项目“移出”仅删除应用登记，项目目录、脚本、Profile、录音、运行记录保留；旧设置中通过软链接登记的项目也能正确移出。设置修改先备份并核验；重启不会自动加入已移出的项目，重新添加仍读磁盘。
+- Book 列表与详情新增删除入口。可取消的确认框说明目标与影响，默认聚焦取消，支持 Esc 和 Tab 焦点循环。确认后先核验并备份原始清单字节，再移除目标 Book 与同 ID legacy demos，避免下次扫描重新出现；其他 Book、未知清单字段、脚本与 Profile 保留。备份路径可在成功提示中展开。清单在确认后有变化则拒绝覆盖，须刷新后重新确认；符号链接清单拒绝写入。
+- 顶部“从磁盘刷新”立即重新读取清单、脚本和 Profile，等正在扫描的任务结束后重读，不被后台扫描忙碌状态跳过。有效详情保持原位；损坏清单显示读取错误，修复后可刷新恢复。播放中仍允许刷新，本轮使用既有快照并标记来源变化，不重启或替换本轮执行。
+- 内置项目/Book 保持保护。播放、清理或启动处理中拒绝删除；项目有待核对的清理记录时拒绝删除 Book，保留原恢复依据与历史。客户端新增的是有限的清单删除入口，浏览/刷新/播放仍不写源文件，不扩展为脚本编辑器或通用文件删除器。随包 Skill 0.9.1 已同步能力与恢复边界，旧调用名保留。
+
+实际验证：
+
+- 最终 `npm run check` 通过：**162 项通过、1 项平台条件跳过**；SDK/样例类型检查通过，3 个 TC 与三种入口的刻意失败校验通过。新增测试覆盖精确备份与资产保留、旧 demos/shadow 兼容、重复删除、过期目标/无效目标、软链接与备份失败保护、显式刷新与后台扫描并发。
+- 打包应用项目管理 **10/10**：[结果](../artifacts/library-management-1792840998041/result.json)。实际 Electron、IPC 与真实临时磁盘文件，覆盖确认取消、清单冲突、删除/备份、刷新保持详情、错误后恢复、待清理保护、播放中保护与来源变化、软链接登记的项目移出、配置备份、重启和重新添加不恢复已删 Book。页面自动操作由 Playwright 完成，添加目录选择器返回受控，没有声称原生选择器或实体快捷键验收。
+- 新界面在真实 Chrome 的独立 UI fixture 验证 8 组，包括弹窗焦点、取消、后端错误与窄窗口；它是模拟 API 的界面验证，和上述真实应用/磁盘结果分开。
+- 打包版混合播放回归 **10/10**：[结果](../artifacts/hybrid-1792840764642/result.json)。内置教程完整 **23/23**，单独 Skill 节真实安装两个入口到临时项目后 **7/7** 续播完成：[教程结果](../artifacts/tutorial-v06-1792840930639/result.json)。未把练习数据或 UI fixture 当作真实文件安装证据。
+- 已查看打包版实际列表、删除确认框和备份提示截图。早期测试对含备份详情的提示全文、异步刷新返回时机、损坏清单后的项目显示名有错误假设，已修正测试并保留失败结果；没有把这些失败覆盖为通过。失败目录：`artifacts/library-management-1792840830507`, `artifacts/library-management-1792840763124`, `artifacts/library-management-1792840927363`。
+- 两入口 Skill validator、引用、源码/打包文件及 ZIP 核验记录位于 [交付核验](../artifacts/library-2026-10-24/package-verification.json)。
+
+交付：[Playbook.app](../release/mac-arm64/Playbook.app)、[macOS arm64 ZIP](../release/Playbook-0.6.1-arm64-mac.zip)。本轮未新增 WPS/PowerPoint 放映、跨平台或签名公证验收。此前验证与失败证据继续保留如下。
+
+---
+
+# 内置播放与实操交接 · v0.6.0 / Skill 0.9.0
+
+日期：2026-10-24，macOS Apple Silicon。基于现有 main / b334b8876e4ead227121b958f305ca2523bec3e6 和已存在的 v0.5 修改继续开发，没有回退或覆盖业务修改。未改艺工业务资产、真实数据或既有清理策略，零新增付费模型调用，未提交或推送。
+
+## 实现与兼容
+
+- 新增真正的 Electron WebContentsView 内置浏览器，由原 Playwright 运行器连接并执行；普通业务页面无客户端 preload。教程默认在客户端播放，旧脚本默认外部 Chrome，可在播放前覆盖选择。Book/Section 批量共享 BrowserContext，各脚本仍独立 prepare/release。
+- 内置播放的控制位于客户端顶部，返回项目只隐藏页面，不停止本轮；独立播放继续使用原生悬浮条。页面自身不注入播放控制。
+- 步骤可选 interaction.manual：旁白完成后交还操作权，隐藏提示、蒙层和演示光标；默认真实等待十秒，可提前继续、暂停倒计时；真实输入重新计时，文件选择和安装期间冻结，结束后重新计时。timeoutMs 为 0 可无限等待，onTimeout 可 continue 或 fail。桌面不自动执行 manual 的 run，交接后执行 verify；停止不执行后续业务步骤。
+- 持久记录 continued / timed-out / cancelled 与真实安装结果，等待结束不等于任务完成。TC 保留自动 run/verify，不伪造用户操作；旧单参回调、Profile、清单和 schemaVersion 1 兼容。
+- 教程扩为 3 Section、23 步。“现在安装 Skill”由用户选择范围/目录并亲自点击后，调用同一真实安装器；自动教学步骤仍保留练习数据边界。仅内置教程、当前手动步骤、匹配页面和用户操作可调用这三个有限接口。普通页面、其他步骤及结束后的写入拒绝。
+- Skill 0.9.0、SDK 类型、产品方案及架构已同步，保留旧调用名。含 manual 的流程导出 PPTX 时明确拒绝，需另外提供已授权的纯自动副本；普通自动流程导出保持兼容。
+- 浏览器临时会话与客户端界面分区隔离。正常退出清理自有缓存，崩溃重启仅核验持久索引中的精确临时路径、所有权标记和原 PID，保留未知状态及警告，不扫描业务资源。
+
+## 验证结果
+
+自动化与原生桌面操作分开记录。下列集成使用实际打包 Electron、WebContentsView、worker、Playwright 和真实临时文件，文件选择器返回受控，不是内存 VM：
+
+- 最终 npm run check：SDK 构建、样例类型检查通过；156 项中 **155 通过、1 条平台条件跳过**；原始/共享/独立 TC **3/3**，三类入口均拒绝被破坏的预期。[日志](../artifacts/hybrid-2026-10-24/playbook-v06-check-final.txt)。
+- 内置与混合播放 **10/10**：十秒自然继续（实际 10082 ms）、提前继续与真实输入、严格 CSP、暂停冻结、停止与 release、强制超时失败、批量会话和逐脚本释放、PPTX 提前拒绝、外部兼容、正常退出和强杀重启精确缓存回收。[最终结果](../artifacts/hybrid-1792835434305/result.json)。
+- 最终完整教程 **23/23**：真实本机中文 TTS、箭头、柔边光圈、三个 prepare/release，真实十秒超时后继续。再次单独播放 Skill 节，实际安装两个 Skill 到新建的临时项目，磁盘文件逐字核验，继续后 **7/7** 完成。文件选择延迟期间继续按钮禁用；未操作的首次回放没有安装记录。手动交接时蒙层和演示光标不可见。[结果](../artifacts/tutorial-v06-1792835434353/result.json)、[实操画面](../artifacts/tutorial-v06-1792835434353/manual-ready.png)、[真实安装后](../artifacts/tutorial-v06-1792835434353/real-installed.png)。
+- 普通自动 PPTX 最终包回归 **11/11**：本机 TTS、音频/计时/备注、单脚本与 Book/Section、暂停继续、失败停止保护原目标。[结果](../artifacts/pptx-packaged-smoke-1792835433952/result.json)。未新增 WPS/PowerPoint 实际放映或人耳试听验收。
+- 同轮生命周期 **31/31**，含 12/25 秒清理、失败/停止、关窗/Quit 协调及崩溃幂等恢复。[结果](../artifacts/lifecycle-packaged-smoke-1792834906877/result.json)。之后只修正交接时引导层隐藏、教程显示文件数及说明文字；清理核心未再修改，后续内置和 PPTX 集成已重验。
+- 两入口 Skill validator 和 **38** 个本地引用通过。最终打包只追加已校对的 Skill 文字及 SDK 类型声明，运行文件与通过上述最终回放的文件摘要逐一相同；源码/应用/ZIP 核验、CRC 和 SHA-256 见 [交付包核验](../artifacts/hybrid-2026-10-24/package-verification.json)。
+
+视觉复查发现的第一版手动交接残留灰色蒙层问题已通过实际 isVisible 回归复现，并修复为明确隐藏整个引导根层；自动讲解恢复时重新显示。早期失败结果与日志保留，不将较早仅检查 popover 关闭的通过当作该视觉缺陷通过。[复现日志](../artifacts/hybrid-2026-10-24/playbook-v06-overlay-regression.txt)。
+
+## 桌面与交付边界
+
+本轮尝试用独立 QA 应用副本执行原生鼠标验证；Computer Use 服务未返回初始应用状态，约 2679 秒后报告 timeoutReached，QA 等待交接也超时。[QA 日志](../artifacts/hybrid-2026-10-24/playbook-native-hybrid.txt)。因此本轮未新增原生文件选择器鼠标、实体全局热键或人耳试听的验收；不能将受控选择器返回及 Playwright 点击当作这些项目通过。窗口 capturePage 不包含子 WebContentsView，embedded-window.png 只记录外壳，内置页面另用其真实 renderer 截图核对，不将空白外壳图称作原生合成画面通过。既有 v0.5 六项原生生命周期记录继续保留在下方。
+
+交付：[Playbook.app](../release/mac-arm64/Playbook.app)、[macOS arm64 ZIP](../release/Playbook-0.6.0-arm64-mac.zip)。未签名公证。内置模式当前拦截新弹窗，需多窗口、多个独立 BrowserContext、扩展或特定启动参数的 Profile 使用外部模式。强杀仍不能保证回调执行，业务恢复仍须精确句柄、归属核验和幂等入口，不能声称任意崩溃下业务资源都已自动清理。
+
+以下历史记录与早期失败证据完整保留。
+
+---
+
+# 内置 Playbook 使用教程 · v0.5.0
+
+日期：2026-10-24。首页默认加入“Playbook 内置教程”项目，首本 Book 为“Playbook 使用教程”。包含 **3 个 Section、3 个脚本、22 步**，可全本或单节播放；原教师培训样例保留。教程项目不可移除，也不能被当作 Skill 安装目标。
+
+教程按普通 schemaVersion 1 的清单、Playbook 与 Profile 实现，资产在 [examples/tutorial](../examples/tutorial/.playbook.json)。Profile 通过页面请求拦截提供同一套已构建 React 界面，配套内存练习数据，持续显示独立练习提示。不读写真实项目、安装目录、用户运行记录或系统剪贴板，不启动本地服务器、不触发云模型。添加项目、播放状态与路径选择是明确标注的练习；教程中的原生悬浮条/系统快捷键等讲解不等于实际触发这些系统能力。Skill 安装仅预览，写入入口明确拒绝。外层教程本身仍由真实桌面播放器执行并独立记录结果。
+
+- `npm run desktop:build`、`npm run check:examples` 和 `npm run package:mac` 通过。`desktop:check` **75 通过、1 项非 macOS 条件跳过**。新增 `node scripts/tutorial-smoke.mjs` 在真实 Chrome 中直接执行 **22/22** 动作和结果断言，另覆盖 Codex/Claude Code 目标路径与安装拒绝；无外部请求。证据：`artifacts/tutorial-browser-1792828314480/`。
+- 最终打包版实际点击首页教程、打开 Section、全本自动播放 **22/22 完成**，三个脚本分别准备页面；Driver.js 箭头、柔边光圈和本机 TTS 已运行并采集画面。再次从单节入口播放，外层客户端暂停、继续、停止通过，停止时后续步骤未执行。内置移除保护、首页顺序、无实际项目新增通过。证据：[打包版结果](../artifacts/tutorial-packaged-1792828493025/result.json)。
+- 已查看首页、章节提示、说明弹窗与 Skill 路径预览的实际截图。证据中的内存播放状态不冒充真实业务回放或真实 Skill 安装；语音结束事件不代表人耳试听。打包验证用真实 Electron/worker、headless Chrome、本地朗读与隔离配置，未新增实体系统快捷键或原生文件选择器验收。随包文件与 ZIP 校验见同目录 `package-verification.json`。
+- 随包 Skill 能力索引与 README 已说明教程入口、内容和练习边界；主/兼容调用名不变。版本号仍取应用自身版本，slogan 保持 `the show must go on`。未改动业务项目数据，未提交或推送。
+
+此前验证记录与失败证据保留如下。
+
+---
+
+# 桌面 v0.5.0 / Skill 0.8.0 · 停止、退出与崩溃清理
+
+日期：2026-10-24，macOS Apple Silicon。开工核对 main / `b334b8876e4ead227121b958f305ca2523bec3e6`，版本 0.4.1，工作区无未提交修改；应用仓库及父目录无额外 AGENTS.md。没有回退版本，没有修改艺工业务代码、真实业务数据或其审计证据，没有新增付费模型调用，也没有提交或推送。
+
+## 实现与兼容
+
+- 旧 `prepare({ page, workspaceDir, parameters }) → { context, release? }`、无参数 release、脚本/Profile/清单 schemaVersion 1 保持兼容；Book/Section 仍共享 BrowserContext，每个脚本独立 prepare/release。前段清理未确认成功，不启动后段。
+- 可选执行 signal、runId/flowId、提前登记 `await registerCleanup(callback, { id, recovery? })`。登记得到持久化确认后才能创建资源；同一函数对象登记并返回只执行一次，同 id 不同函数拒绝，LIFO、本轮不自动重试。先取得 release，再校验 context。prepare 部分失败也释放已登记责任。
+- 执行停止宽限默认 30 秒；每组清理另有默认 60 秒预算，各可配置 1～300 秒。清理取得独立 signal，保留页面至清理结束，不沿用已取消的执行 signal，不再套用旧 8 秒或累计 16 秒终止逻辑。无响应或强制终止保留 failed / unknown，不能伪报 stopped / succeeded。
+- 清理回执落盘后才确定终态；停止意图不会被晚到 completed 覆盖。执行错误、清理错误、晚到错误与回执分别脱敏保存。关窗、Quit 和渲染器异常协调停止、清理、保存后退出；关闭浏览器不先于 Profile 清理。
+- 原子写入并同步运行账本，重启发现未完成责任。可选 Profile recovery 只接受精确、非敏感 JSON 句柄；核对 workspace、Profile、run/flow/scope、恢复版本和源码快照后，才允许用户点击恢复。恢复不调用 prepare、不重跑业务、不扫描资源、不序列化闭包。已确认成功的责任不再恢复；业务入口仍必须幂等。
+- 旧 Profile 无恢复声明时可正常播放，崩溃后显示人工核对；旧 run 默认保留，应用不更改业务 cleanupPolicy。SDK 类型、两入口 Skill 和架构说明已同步。最小接入示例见 [生命周期契约](../skills/playbook-wright/references/lifecycle.md)，使用隔离本地文件说明精确句柄、归属核验与 retain/purge。
+
+## 自动化验证
+
+下列均与原生桌面操作分开记录。最终源代码检查通过后只更新本验证记录，没有再修改实现。
+
+- `npm run check`：SDK 构建、样例类型检查通过；119 项中 **118 通过、1 项非 macOS 条件跳过**；原始/共享/独立 Playwright TC **3/3**，三种入口均拒绝刻意破坏的业务预期。最终 `npm run desktop:check`：76 项中 **75 通过、1 项条件跳过**。日志：[完整检查](../artifacts/cleanup-2026-10-24/playbook-final-check.txt)、[桌面检查](../artifacts/cleanup-2026-10-24/playbook-final-desktop-check.txt)。
+- 最终安装包生命周期 **31/31**：真实 Electron 主进程、utility worker、真实 headless Chrome 和临时文件资源；控制/退出通过 IPC 或 Electron API，不能替代原生鼠标键盘验收。覆盖正常、旧 Profile、run/verify 失败、执行与清理双失败、prepare 部分失败、错误 context + 有效 release、旧 prepare 失败结果未知；prepare/旁白/等待/run/release 中停止；控制页面错误、迟到终态/清理错误保留、停止预算不可被重复登记续期；清理失败/超时、worker 阻塞、不响应取消、批量顺序、PPTX 停止保护旧目标、版本不匹配拒绝恢复、恢复启动失败退出 busy、worker/main 强杀重启及幂等恢复、Quit 等待清理。
+- 合法长清理实测 **12071 ms / 25069 ms**，结束后才记录 stopped；重复登记的 1000 ms 停止宽限实测持久化结束时间 **1002 ms**，没有被续期。证据：[最终 31 项结果](../artifacts/lifecycle-packaged-smoke-1792822392650/result.json)。
+- 最终包 PPTX **11/11**，覆盖 Book/Section/单脚本、暂停继续、截图与旁白采集顺序、真实本机中文 TTS、内嵌音频/备注/计时、动作与 release、失败或停止保留旧文件。文件选择器返回受控；未新增 PowerPoint/WPS 放映或人耳试听验收。证据：[PPTX 结果](../artifacts/pptx-packaged-smoke-1792822481194/result.json)。
+- 0.5.0 候选包原桌面回归 **29/29**：布局、搜索、只读资产、Book/Section、暂停/重播、快照、全局控制注册、Skill 安装与备份。证据：`artifacts/v03-packaged-smoke-1792821416075/`。此后补充的错误脱敏、晚到回执与竞态修复由最终完整检查及 31/11 项回归覆盖，不将较早轮次伪称为最后源码版本。
+- 两入口 Skill validator、30 个 Markdown 本地引用通过；最终应用/ZIP 与构建源码核对 27 个运行文件、13 个 Skill 文件，ZIP CRC 通过。包校验与 SHA-256：[package-verification.json](../artifacts/cleanup-2026-10-24/package-verification.json)。
+
+## 真实 macOS 桌面验证
+
+使用独立标识的 QA 应用副本、headed Chrome、可销毁本地文件和专用用户数据目录，不接触真实业务资源或用户应用配置。电脑控制执行原生按钮、红色关窗和 Cmd-Q；强杀仅针对已核对路径/PID 的 fixture 进程。没有把纯内存 VM、受控 IPC 或模拟按键回调当作这些操作的证据。
+
+1. 原生停止：12 秒 release 期间点击停止，实测清理 **12132 ms**，页面仍可用、清理 signal 未预取消，完成后 stopped / succeeded。
+2. 原生关窗：25 秒 release 期间关窗，窗口等待清理 **25096 ms**，保存 stopped / succeeded 后退出。
+3. 原生 Cmd-Q：业务步骤执行中取消，未启动后续步骤，清理与回执成功后进程退出。
+4. worker SIGKILL：界面显示 failed / unknown；点击恢复精确删除一次，原执行失败历史保留。
+5. main SIGKILL：重启识别未完成清理，历史中点击恢复，精确删除一次，不重跑业务。
+6. 纯旧接口、无恢复声明：main SIGKILL 后重启显示人工核对，没有恢复按钮或自动删除；对应临时文件有意保留为未清理证据。
+
+六项记录与截图、AX 文本、运行账本、事件及 fixture 见 [原生桌面结果](../artifacts/cleanup-2026-10-24/native/result.json)。早期 QA 副本的 CFBundleName 修改导致 helper 查找失败，仅修复 QA 副本并保留日志，交付包不受影响。早期 stopped 摘要文字滞后截图保留，后来已修正文案；六项验证后 Mac 锁屏，**最后一次最新文案的界面复看未执行**，不计为通过。空闲 QA 进程已按核验 PID 关闭，未中断业务回调。
+
+## 交付与边界
+
+交付：`release/mac-arm64/Playbook.app`、`release/Playbook-0.5.0-arm64-mac.zip`。本次未升级艺工项目已安装的 Skill 或改接其 Profile；新恢复能力的最小接入示例已随产品 Skill 提供，旧接口继续可播放。
+
+强杀无法保证 finally 或回调执行；资源操作已成功但回执尚未落盘的间隙仍可能再次调用恢复，因此精确资源句柄必须在创建前登记，业务恢复必须校验归属并幂等。缺少声明、版本不符、仍有活 worker、清理超时或结果未知时，应用保留人工核对状态，不能声称所有资源已删除。没有跨机器、Windows/Linux、签名公证或真实艺工数据验收。恢复句柄只接受非敏感结构，业务仍不得把凭据装入不透明字符串。
+
+旧版 VM 缺陷复现、早期进程验证失败和历史证据全部保留；VM 仅作旧缺陷定位。较早 PID 时机与停止时间观测方式的问题有独立修复和最终重验，没有覆盖失败记录。以下历史验证记录完整保留。
+
+---
+
 # 桌面 v0.4.1 / Skill 0.7.1 · PPTX 放映同步修复
 
 日期：2026-10-21，macOS Apple Silicon。用户反馈声音被换页截断、画面错位后，使用电脑控制在实际 WPS Office 放映中复现并修复。上一版文件结构、渲染与自动检查通过的记录保留在下方；该记录没有完成实际放映，不能视为声音与画面同步验收。

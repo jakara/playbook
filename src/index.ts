@@ -17,20 +17,35 @@ export interface PlaybookRedaction {
   padding?: number;
 }
 
+export interface PlaybookInteraction {
+  mode: 'manual';
+  prompt?: string;
+  /** Defaults to 10000 ms; 0 waits until the user explicitly continues. */
+  timeoutMs?: number;
+  onTimeout?: 'continue' | 'fail';
+}
+
+export interface PlaybookStepOptions {
+  /** Supplied by desktop verification after a manual handoff; absent in TC execution. */
+  interaction?: { outcome: 'continued' | 'timed-out'; elapsedMs: number };
+}
+
 export interface PlaybookStep<C extends PlaybookContext> {
   id: string;
   title: string;
   explain: string;
   target?: (context: C) => Locator;
   narration?: false | NarrationClip;
+  interaction?: PlaybookInteraction;
   presentation?: {
     chapter?: string;
     side?: 'top' | 'right' | 'bottom' | 'left';
     holdMs?: number;
     afterMs?: number;
   };
-  run: (context: C) => Promise<void>;
-  verify: (context: C) => Promise<void>;
+  /** Desktop skips run for manual steps. TC execution uses it as the automated adaptation. */
+  run: (context: C, options?: PlaybookStepOptions) => Promise<void>;
+  verify: (context: C, options?: PlaybookStepOptions) => Promise<void>;
 }
 
 export interface Playbook<C extends PlaybookContext> {
@@ -38,6 +53,8 @@ export interface Playbook<C extends PlaybookContext> {
   id: string;
   title: string;
   summary: string;
+  /** Defaults to external; one browser container is used for the entire playback batch. */
+  playback?: { browser?: 'embedded' | 'external' };
   presentation?: {
     spotlightRadius?: number;
     spotlightFeather?: number;
@@ -77,10 +94,11 @@ export function definePlaybook<C extends PlaybookContext>(book: Playbook<C>): Pl
 
 /** Shared with static workspace discovery; never inspects or invokes business callbacks. */
 export function validatePlaybookPresentation(book: {
+  playback?: unknown;
   presentation?: unknown;
   narration?: unknown;
   redactions?: unknown;
-  steps: readonly { presentation?: unknown; narration?: unknown }[];
+  steps: readonly { presentation?: unknown; narration?: unknown; interaction?: unknown }[];
 }): void {
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -119,6 +137,13 @@ export function validatePlaybookPresentation(book: {
       if (range) number(option, range[0], range[1], key);
     }
   };
+  if (has(book, 'playback')) {
+    const value = book.playback;
+    if (!record(value) || Object.keys(value).some(key => key !== 'browser')
+      || (has(value, 'browser') && !['embedded', 'external'].includes(value.browser as string))) {
+      throw new Error('Invalid playback browser; use embedded or external');
+    }
+  }
   presentation(book.presentation, flowBounds);
   if (has(book, 'narration')) {
     const value = book.narration;
@@ -147,6 +172,19 @@ export function validatePlaybookPresentation(book: {
     }
   }
   for (const step of book.steps) {
+    if (has(step, 'interaction')) {
+      const value = step.interaction;
+      if (!record(value) || Object.keys(value).some(key => !['mode', 'prompt', 'timeoutMs', 'onTimeout'].includes(key))
+        || value.mode !== 'manual') throw new Error('Invalid step interaction; use manual mode');
+      if (has(value, 'prompt')) text(value.prompt, 'interaction.prompt');
+      if (has(value, 'timeoutMs') && (typeof value.timeoutMs !== 'number' || !Number.isInteger(value.timeoutMs)
+        || value.timeoutMs < 0 || value.timeoutMs > 300000)) {
+        throw new Error('Invalid interaction.timeoutMs; use an integer from 0 to 300000');
+      }
+      if (has(value, 'onTimeout') && !['continue', 'fail'].includes(value.onTimeout as string)) {
+        throw new Error('Invalid interaction.onTimeout; use continue or fail');
+      }
+    }
     presentation(step.presentation, flowBounds);
     if (record(step.presentation)) {
       const value = step.presentation;
@@ -157,6 +195,46 @@ export function validatePlaybookPresentation(book: {
   }
 }
 
+export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+export interface PlaybookCleanupOptions {
+  signal: AbortSignal;
+  reason: 'completed' | 'failed' | 'stopped';
+  runId: string;
+  flowId: string;
+  scopeId: string;
+}
+
+/** Optional argument preserves existing no-argument release callbacks. */
+export type PlaybookCleanup = (options?: PlaybookCleanupOptions) => Promise<void>;
+
+export interface PlaybookCleanupRegistrationOptions {
+  id: string;
+  /** Exact non-secret resource handle; requires the Profile's recovery declaration. */
+  recovery?: JsonValue;
+}
+
+export interface PlaybookPrepareOptions {
+  page: Page;
+  workspaceDir: string;
+  parameters: Record<string, unknown>;
+  signal?: AbortSignal;
+  runId?: string;
+  flowId?: string;
+  /** Await registration before creating the owned resource. */
+  registerCleanup?: (callback: PlaybookCleanup, options?: PlaybookCleanupRegistrationOptions) => Promise<void>;
+}
+
+export interface PlaybookRecoveryOptions {
+  runId: string;
+  flowId: string;
+  scopeId: string;
+  cleanupId: string;
+  handle: JsonValue;
+  workspaceDir: string;
+  signal: AbortSignal;
+}
+
 export interface PlaybookProfile<C extends PlaybookContext> {
   schemaVersion: 1;
   id: string;
@@ -164,12 +242,36 @@ export interface PlaybookProfile<C extends PlaybookContext> {
   dataMode: 'real' | 'fixture' | 'mock';
   roles: readonly string[];
   resetBeforeRun?: boolean;
-  prepare: (options: { page: Page; workspaceDir: string; parameters: Record<string, unknown> }) => Promise<{ context: C; release?: () => Promise<void> }>;
+  lifecycle?: {
+    /** Cooperative execution-stop grace period; default 30000 ms. */
+    stopTimeoutMs?: number;
+    /** Independent resource-release budget; default 60000 ms. */
+    cleanupTimeoutMs?: number;
+  };
+  recovery?: {
+    version: string;
+    /** Must be idempotent; process death can require retrying the same cleanup key. */
+    recover: (options: PlaybookRecoveryOptions) => Promise<void>;
+  };
+  prepare: (options: PlaybookPrepareOptions) => Promise<{ context: C; release?: PlaybookCleanup }>;
 }
 
 export function defineProfile<C extends PlaybookContext>(profile: PlaybookProfile<C>): PlaybookProfile<C> {
   if (profile.schemaVersion !== 1 || !profile.id || !profile.title || !['real', 'fixture', 'mock'].includes(profile.dataMode)
     || !Array.isArray(profile.roles) || typeof profile.prepare !== 'function') throw new Error('Invalid Playbook profile');
+  if (profile.lifecycle !== undefined) {
+    if (typeof profile.lifecycle !== 'object' || profile.lifecycle === null || Array.isArray(profile.lifecycle)) {
+      throw new Error('Invalid Playbook lifecycle options');
+    }
+    for (const [key, value] of Object.entries(profile.lifecycle)) {
+      if (!['stopTimeoutMs', 'cleanupTimeoutMs'].includes(key) || !Number.isInteger(value) || value < 1000 || value > 300000) {
+        throw new Error(`Invalid Playbook lifecycle budget: ${key}`);
+      }
+    }
+  }
+  if (profile.recovery !== undefined && (typeof profile.recovery !== 'object' || profile.recovery === null
+    || typeof profile.recovery.version !== 'string' || !profile.recovery.version.trim()
+    || typeof profile.recovery.recover !== 'function')) throw new Error('Invalid Playbook recovery declaration');
   return profile;
 }
 
@@ -181,6 +283,7 @@ export interface RunHooks<C extends PlaybookContext> {
 
 /** Test/reference executor; the desktop runner supplies interactive presentation.
  * Setup/authentication and teardown remain in the caller's fixtures/profile.
+ * Manual steps still call run/verify here; provide an equivalent automated run or explicitly skip the TC.
  */
 export async function runPlaybook<C extends PlaybookContext>(
   book: Playbook<C>, context: C, hooks: RunHooks<C> = {},

@@ -60,6 +60,50 @@ test('reference test execution ignores feathering, redactions and all narration 
   assert.deepEqual(events, ['run', 'verify']);
 });
 
+test('manual desktop interaction keeps the TC automated adaptation and supplies no invented outcome', async () => {
+  const events = [], context = { page: {} };
+  const flow = book([{ id: 'manual', title: 'Install', explain: 'Choose whether to install',
+    interaction: { mode: 'manual', timeoutMs: 0, onTimeout: 'fail' },
+    run: async (received, options) => { assert.equal(received, context); assert.equal(options, undefined); events.push('automated action'); },
+    verify: async (received, options) => { assert.equal(received, context); assert.equal(options, undefined); events.push('assertion'); },
+  }]);
+  flow.playback = { browser: 'embedded' };
+  await runPlaybook(flow, context);
+  assert.deepEqual(events, ['automated action', 'assertion']);
+});
+
+test('browser selection and manual interaction reject unsupported or ambiguous contracts', async t => {
+  const base = () => ({ schemaVersion: 1, id: 'interactive', title: 'Interactive', summary: '',
+    requirements: { dataMode: 'fixture', effects: 'read-only', replay: 'safe', roles: [] },
+    steps: [{ id: 'one', title: 'One', explain: 'Explain', run: async () => {}, verify: async () => {} }] });
+  const cases = [
+    ['null browser options', value => { value.playback = null; }],
+    ['unknown browser', value => { value.playback = { browser: 'chrome' }; }],
+    ['browser extra field', value => { value.playback = { browser: 'embedded', unsafe: true }; }],
+    ['null interaction', value => { value.steps[0].interaction = null; }],
+    ['missing manual mode', value => { value.steps[0].interaction = { timeoutMs: 10000 }; }],
+    ['unknown mode', value => { value.steps[0].interaction = { mode: 'auto' }; }],
+    ['empty prompt', value => { value.steps[0].interaction = { mode: 'manual', prompt: ' ' }; }],
+    ['negative timeout', value => { value.steps[0].interaction = { mode: 'manual', timeoutMs: -1 }; }],
+    ['fractional timeout', value => { value.steps[0].interaction = { mode: 'manual', timeoutMs: 10.5 }; }],
+    ['large timeout', value => { value.steps[0].interaction = { mode: 'manual', timeoutMs: 300001 }; }],
+    ['nonfinite timeout', value => { value.steps[0].interaction = { mode: 'manual', timeoutMs: Infinity }; }],
+    ['text timeout', value => { value.steps[0].interaction = { mode: 'manual', timeoutMs: '10000' }; }],
+    ['unknown timeout outcome', value => { value.steps[0].interaction = { mode: 'manual', onTimeout: 'skip' }; }],
+    ['extra interaction field', value => { value.steps[0].interaction = { mode: 'manual', click: true }; }],
+  ];
+  for (const [name, change] of cases) await t.test(name, () => {
+    const value = base(); change(value); assert.throws(() => definePlaybook(value), undefined, name);
+  });
+  for (const browser of ['embedded', 'external']) for (const timeoutMs of [0, 10000, 300000]) {
+    const value = base(); value.playback = { browser };
+    value.steps[0].interaction = { mode: 'manual', prompt: 'Try it now', timeoutMs, onTimeout: 'continue' };
+    assert.equal(definePlaybook(value), value);
+  }
+  const defaults = base(); defaults.playback = {}; defaults.steps[0].interaction = { mode: 'manual' };
+  assert.equal(definePlaybook(defaults), defaults);
+});
+
 test('new presentation fields validate shape, ranges and audio path boundaries', async t => {
   const base = () => ({ schemaVersion: 1, id: 'valid', title: 'Valid', summary: '',
     requirements: { dataMode: 'fixture', effects: 'read-only', replay: 'safe', roles: [] },

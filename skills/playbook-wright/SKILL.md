@@ -1,62 +1,40 @@
 ---
 name: playbook-wright
-description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和 Profile，整理演示需求、调整讲解、语音、打码与光圈效果，并与原生 Playwright TC 双向复用或转换。配合用户自己的智能体使用。
+description: Playbook 公开版基础接入引导：检查或安装桌面播放器，安装基础入口并帮助用户打开已有演示。完整创作、维护和测试转换由另行分发的专业 Skill 提供。
+metadata:
+  edition: community-bootstrap
 ---
 
-# playbook-wright · Playbook 创作与维护
+# Playbook 基础接入引导
 
-帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、Book/Section 编排和 TC 转换；桌面应用负责项目浏览、搜索、播放、暂停继续、停止重播、PPTX 导出与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
+当前安装页 Skill 版本为 **0.10.0**，适配客户端 v0.6 及以上。此公开入口只负责安装和接入；不包含专业版的需求梳理、创作、呈现调整和 Playwright TC 双向转换指引。专业 Skill 将通过 WorkBuddy 市场另行分发，目前尚未上架。不能声称已购买、已取得专业版或给出不存在的购买链接。
 
-主调用名为 `$playbook-wright`；旧 `$playbook-playwright` 通过同级兼容 Skill 读取本文件，执行同一套指引。产品名仍为 Playbook，不改 SDK 名、清单或业务资产。
+## 检查应用
 
-## 开始时
+在本 Skill 目录执行：
 
-先识别用户是在创作、维护/调整、转换还是修复，读取与本次目标有关的已有脚本、页面、测试及环境。不要假设必须先有 TC，也不要把用户已说清的要求变成固定访谈。
+```bash
+bash scripts/install.sh --ensure-app
+```
 
-先读 [可用功能与选择方式](references/capabilities.md)，了解当前能力并按用户目标选组合：
+已有兼容应用则复用；缺少时从 `jakara/playbook` 正式 GitHub Release 固定版本下载，核对 SHA-256 后安装到用户 Applications。仅支持 macOS arm64；未经 Apple 签名和公证，首次打开可能需要系统确认。不能关闭系统安全控制或清除 quarantine。
 
-- 项目文件夹与 Book、Section Tab、单脚本及两级批量播放。
-- 开场、章节、箭头、蒙层、光标、点击效果、渐变柔边与前后停留。
-- 页面区域遮盖/模糊、本机语音与本地录音、同步播放控制。
-- 客户端原生悬浮条的显隐、拖动、收起/展开、全局快捷键与恢复 Chrome。
-- 只读浏览与搜索、执行快照、运行反馈、TC 双向转换和 Skill 安装更新。
-- Book/Section/脚本回放导出 PPTX：页面截图、内嵌语音、按讲解换页与演讲者备注，见 [PPTX 导出](references/pptx-export.md)。
+云端智能体不能假定能访问用户电脑。没有实际本地工具时，提供[安装指引](https://github.com/jakara/playbook/blob/main/install.md)，明确尚未检查/安装到用户本机，不把云端操作报成桌面成功。安装本身不调用模型 API。
 
-创作或修改资产时读取 [契约](references/contract.md)；其余按实际工作只读取对应指引：
+## 安装基础入口
 
-- 从需求或手工操作生成脚本、需要补齐意图时，读 [需求引导与创作](references/authoring.md)。
-- 管理脚本、修改讲解/效果、编排或根据反馈修复时，读 [维护与呈现调整](references/maintenance.md)。
-- TC 转脚本时，读 [TC → Playbook](references/tc-to-playbook.md)；转回测试时，读 [Playbook → TC](references/playbook-to-tc.md)。共享模式为默认，用户要求脱离 Playbook 时才独立导出。
+仅在用户要求安装到智能体框架时，先确认框架和作用范围。项目级必须使用用户指定的现有项目根目录，不猜成某个 Book 或演示子目录：
 
-已有项目契约与本 Skill 不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
+```bash
+bash scripts/install.sh --install --framework codex --scope project --project-root /用户指定的项目根目录
+```
 
-当前安装页 Skill 版本为 **0.7.1**，适配客户端 v0.4；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用，新呈现字段需要 v0.3 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
+支持 codex/claude-code 与 user/project。工具只安装公开基础引导和旧调用名兼容入口；不能安装、获取或更新市场专业版。外层已固定版本时，通过 `PLAYBOOK_RELEASE_TAG=v0.7.0` 传递同一 tag。`--app-dir /绝对目录` 指定应用位置；`--check-app` 只检测，找到返回0、缺少返回3、不支持返回2。
 
-安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-wright` 或所选项目目录下的 `.agents/skills/playbook-wright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-wright` 或 `.claude/skills/playbook-wright`。项目安装由用户在系统文件夹选择器中指定智能体打开的项目目录，不要求先登记到 Playbook 或存在 `.playbook.json`；目标追加框架固定的 Skill 子目录，不自动猜测或改为上级仓库。已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。安装器同时写入主 Skill 与同级 `playbook-playwright` 兼容入口，逐一预览并保护两者的本地修改；更新旧安装先备份。若第二个入口失败，已完成的主入口保留，显示未完成并可重试；不宣称跨两个目录原子替换。安装成功只代表两个入口的文件核验通过，需在目标智能体重新加载或开启新会话，确认调用当前版本。
+安装器会保护已有完整/专业 Skill、本地修改和软链接。发现冲突先报告具体目录；仅用户明确同意替换并有已核验备份时才能加 --replace，不能为了完成基础引导安装覆盖专业内容。安装后让目标框架重新加载技能或开启新会话，文件校验通过不代表当前会话已识别。
 
-交付可由桌面直接添加的项目：根目录 `.playbook.json`，清单引用的 `.playbook.ts` 与 `.profile.ts`，以及实际所需的业务 helpers。界面统一使用“项目”，工作区是契约中同一目录的技术称呼，不建立另一份资料库。清单按 Book → Section → 脚本组织；界面左侧仅“项目文件夹 → Book”两层，打开 Book 后右侧用 Section Tab 平铺脚本。Book/Section 只保存引用和顺序，不复制动作。顶层默认导出和步骤元数据必须是静态 literal，业务动态行为保留在原生 callbacks 中。不要生成未受支持的动作 JSON、编辑器或自动转换 CLI。
+## 打开现有演示
 
-## 语义边界
+让用户打开 Playbook，播放内置教程，或添加已有 `.playbook.json` 的项目文件夹。客户端提供项目/Book 浏览、Section Tab、搜索、刷新、播放和 PPTX 导出。用户需要创作时明确当前只是基础入口；已有专业 Skill 则交由其处理，否则可提供公开 SDK 和[架构文档](https://github.com/jakara/playbook/blob/main/docs/architecture.md)供用户自己的智能体使用，不能伪称加载专业指引。
 
-- 保留 Locator、动作顺序、事件等待、断言预期、账号角色、mock/fixture、数据准备和清理的实际语义。保留原测试，除非用户授权替换；共享迁移可新增 TC 适配入口供对照。
-- 讲解、蒙层与阅读时间属于演示元数据，不能代替业务断言或用固定等待修补缺失的结果条件。不要把 `fill`、键盘事件、上传、API 写入等改成“看起来差不多”的操作。
-- 光圈柔边、流程级打码与语音由脚本元数据描述。按实际需求选本地朗读或工作区录音；不把敏感值抄进讲稿。打码只改变观看效果，DOM/API 数据仍存在，不能替代业务脱敏。TC 复用/导出忽略这些纯呈现字段，不将遮盖实现迁入测试。
-- 区分 real / fixture / mock，声明业务副作用与重播条件；元数据不是安全拦截器，`read-only` 必须由实际路径和运行证据支撑。
-- 不把测试专用账号、临时权限、绕过登录、路由 mock 或测试数据库准备默认移植到客户现场。可以忠实保留为模拟演示并标识来源；需要真实服务时另外实现并验证 Profile。
-- 测试生命周期仍由 Playwright Test 管理，演示登录、角色、数据准备和释放由业务 `defineProfile` 提供。`prepare({ page, workspaceDir, parameters })` 返回 `{ context, release? }`；配置相对 `workspaceDir` 解析，准备部分失败自行清理自身 hooks。不要在共享流程中调用 `test()`、`test.use()`、`test.beforeEach()` 或隐式依赖 TestInfo。
-- 动态分支、复杂闭包、自定义 matcher、数据库 fixture 或多页面协作无法直接映射时保留原 helper 依赖并说明适配要求。只阻塞确实依赖缺失信息的部分，不用空函数或 TODO 冒充可运行转换。
-- 本 Skill 不授予执行客户数据写入或生产清理的权限。优先在已有隔离测试环境验证；原用例本就包含的写入也要确认运行目标与当前授权一致。
-
-## 交付与验证
-
-按任务交付目标脚本和适用的 TC/环境适配入口；涉及 TC 转换时，按 [报告规范](references/conversion-report.md) 记录对应关系和验证结果。能从原代码确认的内容自行确定，不要求用户重复提供。
-
-普通创作和小范围调整可直接说明需求、文件、实际验证与缺口，不强制另建 PRD 或转换报告。涉及 TC 转换时使用上述报告规范；同步清单中的脚本、Profile、标签和 Book/Section 引用。按 Book 或 Section 播放时，所有脚本使用所选同一 Profile，每个脚本单独 prepare/release，不能依赖上一脚本的页面或内存上下文。
-
-进度和播放控制由客户端原生悬浮条提供，约 3 秒无鼠标/键盘活动后隐藏，活动后显现。默认系统快捷键为 `CommandOrControl+Alt+P`，用于播放/暂停；注册失败会提示。脚本描述开场、箭头、蒙层、柔边光圈、打码和语音，不向业务页面注入进度条、快捷键 hook 或另一套控制 UI。语音随暂停/继续/停止同步；播放栏可拖动、收成小条并展开，继续时恢复并请求置前受控 Chrome。这些客户端控制不是单脚本呈现参数，细节见能力索引。
-
-分别核对业务项目的类型检查、桌面静态检查和实际播放。应用参数 `--check-workspace <工作区绝对路径>` 只检查静态元数据、引用与编译打包，输出明确标记 `typecheck: not-run`、`browser: not-run`；不能据此声称类型、登录、业务断言或视觉回放通过。具备已授权的隔离环境时运行实际入口；TC 转换还应对照原用例与转换后入口，可行时用刻意失败的预期确认断言仍生效。
-
-若生成负向用例副本，将它放在正向测试收集目录之外或明确排除；核对实际收集项，避免把预期失败副本混入正向通过结论。
-
-收尾区分：已保留、已适配、需要补齐、实际通过、尚未验证。只有编译通过时不能声称业务等价或客户演示可用。输出具体路径、执行结果和最小剩余动作。
+业务脚本、Profile、凭据和运行证据留在用户项目；不写入产品仓库。不调用付费模型、不操作真实业务数据，也不改动受管理插件缓存。

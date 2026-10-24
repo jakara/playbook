@@ -1,0 +1,50 @@
+import { expect } from '@playwright/test';
+import { definePlaybook } from '@playbook/core';
+
+export default definePlaybook({
+  schemaVersion:1,id:'tutorial.skill',title:'交给自己的智能体',
+  summary:'认识随包基础引导，选择框架与项目目录；专业创作 Skill 由市场另行提供。',
+  playback:{browser:'embedded'},
+  presentation:{spotlightFeather:30,defaultHoldMs:1600,cursorMoveMs:750,openingMs:2400},
+  narration:{enabled:true,voice:'Tingting',rate:200,opening:{text:'最后，认识基础接入引导。专业创作和维护 Skill 通过市场另行提供。'}},
+  requirements:{dataMode:'fixture',effects:'writes',replay:'safe',roles:[]},
+  steps:[
+    {id:'open',title:'打开 Skill 安装',explain:'客户端随包提供 playbook-wright 基础接入引导，保留旧调用名。完整专业创作 Skill 不在此安装包中。',
+      narration:{text:'打开 Skill 安装，为智能体安装基础接入引导。'},presentation:{chapter:'把创作交给智能体'},
+      target:({page})=>page.getByRole('button',{name:'Skill 安装',exact:true}),
+      run:async({page})=>{await page.getByRole('button',{name:'Skill 安装',exact:true}).click();},
+      verify:async({page})=>{await expect(page.getByRole('heading',{name:'playbook-wright',exact:true})).toBeVisible();}},
+    {id:'framework',title:'选择自己使用的智能体',explain:'支持 Codex 和 Claude Code。安装路径会随框架改变；当前选择 Codex。',
+      narration:{text:'选择你使用的智能体，当前以 Codex 为例。'},
+      target:({page})=>page.getByLabel('使用的框架',{exact:true}),
+      run:async({page})=>{await page.getByLabel('使用的框架',{exact:true}).selectOption('codex');},
+      verify:async({page})=>{await expect(page.getByLabel('使用的框架',{exact:true})).toHaveValue('codex');}},
+    {id:'scope',title:'安装到个人或指定项目',explain:'个人安装可供该框架的项目使用；指定项目只作用于选定目录。这里选择指定项目。',
+      narration:{text:'选择指定项目，把 Skill 放到你正在使用的项目里。'},
+      target:({page})=>page.getByRole('radio',{name:'指定项目',exact:false}),
+      run:async({page})=>{await page.getByRole('radio',{name:'指定项目',exact:false}).check();},
+      verify:async({page})=>{await expect(page.getByRole('button',{name:'选择文件夹',exact:true})).toBeVisible();}},
+    {id:'folder',title:'由你指定项目目录',explain:'选择智能体打开的项目根目录，不必先在 Playbook 登记。练习返回示例路径，不会打开真实文件选择器。',
+      narration:{text:'选择智能体打开的项目目录，这里使用练习路径。'},
+      target:({page})=>page.getByRole('button',{name:'选择文件夹',exact:true}),
+      run:async({page})=>{await page.getByRole('button',{name:'选择文件夹',exact:true}).click();},
+      verify:async({page})=>{await expect(page.getByLabel('项目文件夹',{exact:true})).toHaveValue('/练习/我的演示项目');}},
+    {id:'preview',title:'先核对路径与版本',explain:'安装前预览主入口、兼容入口与随包版本。真正点击安装才写文件；已有内容会按安装器规则保护和备份。下一步会交给你亲自选择与安装。',
+      narration:{text:'先核对路径和版本。稍后可以亲自选择与安装。'},
+      target:({page})=>page.locator('.install-preview').first(),
+      run:async()=>{},verify:async({page})=>{await expect(page.locator('.target-path').first()).toHaveText('/练习/我的演示项目/.agents/skills/playbook-wright');await expect(page.getByRole('button',{name:'安装 Skill',exact:true})).toBeEnabled();}},
+    {id:'install-now',title:'可选：现在安装 Skill',explain:'现在可以亲自选择智能体、安装位置并点击安装基础引导。内置模式会真实写入你选择的目录；打开选择器或安装期间暂停计时。也可直接继续，未操作时十秒后继续讲解。',
+      narration:{text:'现在可以选择位置并亲自安装 Skill。也可以继续观看，十秒后自动继续。'},
+      interaction:{mode:'manual',prompt:'现在可以真实安装 Skill：核对框架和目标位置后自行点击安装。操作中暂停计时；也可直接继续。',timeoutMs:10000,onTimeout:'continue'},
+      target:({page})=>page.getByRole('button',{name:'安装 Skill',exact:true}),
+      run:async()=>{},
+      verify:async({page})=>{
+        await expect(page.getByRole('heading',{name:'playbook-wright',exact:true})).toBeVisible();
+        await expect(page.locator('.install-error')).toHaveCount(0);
+      }},
+    {id:'author',title:'描述需求，让智能体生成脚本',explain:'重新加载智能体后，用 $playbook-wright 描述观众、核心流程与讲解节奏。也可复用 Playwright 测试，再回到 Playbook 查看、播放与验证。',
+      narration:{text:'使用 playbook-wright 描述需求，生成脚本后回到这里播放验证。'},
+      target:({page})=>page.locator('.skill-aside'),
+      run:async()=>{},verify:async({page})=>{await expect(page.locator('.skill-aside')).toContainText('在智能体中创作');await expect(page.locator('.skill-aside')).toContainText('在 Playbook 中播放');}},
+  ],
+});

@@ -1,8 +1,8 @@
 html.playback-control-window, .playback-control-window body, .playback-control-window #root { background: transparent !important; overflow: hidden; min-height: 0; }
 .playback-control-bar { position: absolute; inset: 9px 10px 12px; display: flex; align-items: center; gap: 20px; padding: 16px 20px 19px; border: 1px solid #ffffff2b; border-radius: 14px; color: #f0f6f3; background: #1c302af5; box-shadow: 0 6px 12px #0b1d232d; font-size: 13px; -webkit-app-region: drag; user-select: none; }
 .control-brand { display: flex; align-items: center; gap: 9px; font-weight: 650; }
-.control-brand i { width: 7px; height: 7px; border-radius: 50%; background: #7adab7; box-shadow: 0 0 0 4px #77c9aa14; }
-.control-brand i.paused { background: #eac77b; }
+.control-brand > svg { flex-shrink: 0; color: #7adab7; }
+.control-brand > svg.paused { color: #eac77b; }
 .control-caption { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .control-caption small { font-size: 10px; color: #a6beb2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .control-caption strong { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

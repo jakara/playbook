@@ -1,13 +1,13 @@
 import { BrowserWindow, screen, powerMonitor } from 'electron';
 import path from 'node:path';
 
-const playing = run => run && ['preparing', 'playing', 'paused', 'pausing', 'stopping', 'exporting'].includes(run.state);
+const playing = run => run && ['waiting', 'preparing', 'playing', 'paused', 'pausing', 'stopping', 'exporting', 'cleaning', 'recovering'].includes(run.state);
 
-export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityChange }) {
+export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityChange, isEmbeddedVisible = () => false }) {
   const window = new BrowserWindow({ title: 'Playbook 播放控制', width: 800, height: 104, show: false,
     frame: false, transparent: true, hasShadow: false, resizable: false, movable: true,
     focusable: false, skipTaskbar: true, fullscreenable: false, acceptFirstMouse: true,
-    webPreferences: { preload: path.join(appRoot, 'build/control-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false } });
+    webPreferences: { preload: path.join(appRoot, 'build/control-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, partition: 'playbook-shell', backgroundThrottling: false } });
   window.setAlwaysOnTop(true, 'floating');
   window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -17,7 +17,7 @@ export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityC
   const state = () => {
     const run = getRun();
     return { visible: !window.isDestroyed() && window.isVisible(), collapsed, shortcut,
-      run: run ? Object.fromEntries(['id', 'title', 'state', 'total', 'completed', 'index', 'stepTitle', 'sectionTitle'].map(key => [key, run[key]])) : null };
+      run: run ? Object.fromEntries(['id', 'title', 'state', 'total', 'completed', 'index', 'stepTitle', 'sectionTitle', 'stopRequested', 'interaction'].map(key => [key, run[key]])) : null };
   };
   const publish = () => { if (!window.isDestroyed()) window.webContents.send('playbook:control-state', state()); };
   function position() {
@@ -44,7 +44,7 @@ export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityC
     if (next.x !== point.x || next.y !== point.y) lastMovement = now;
     point = next;
     // System idle observes mouse/keyboard activity without recording keys or installing hooks.
-    const show = Boolean(playing(getRun()) && (powerMonitor.getSystemIdleTime() < 3 || now - lastMovement < 3000 || now - pulseAt < 3000));
+    const show = Boolean(playing(getRun()) && !isEmbeddedVisible() && (getRun()?.state === 'waiting' || powerMonitor.getSystemIdleTime() < 3 || now - lastMovement < 3000 || now - pulseAt < 3000));
     if (show !== window.isVisible()) {
       if (show) { position(); window.showInactive(); } else window.hide();
       publish(); onVisibilityChange();

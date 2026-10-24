@@ -9,3 +9,7 @@ playwright-report/
 *.local.ts
 *.log
 .DS_Store
+
+# Commercial sources and local release staging stay private.
+.private/
+distribution/

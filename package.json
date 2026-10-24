@@ -1,6 +1,6 @@
 {
   "name": "@playbook/core",
-  "version": "0.4.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Playbook desktop player and AI-native authoring skill",
@@ -20,9 +20,10 @@
     "start": "npm run desktop:build && electron .",
     "desktop:build": "npm run build && node scripts/build-desktop.mjs",
     "desktop:check": "node --test tests/desktop-*.test.mjs tests/skill-installer.test.mjs",
-    "desktop:smoke": "node scripts/desktop-smoke.mjs",
-    "package:mac": "npm run desktop:build && electron-builder --mac dir zip --arm64",
-    "test:pptx": "node scripts/pptx-smoke.mjs"
+    "desktop:smoke": "node scripts/hybrid-smoke.mjs",
+    "package:mac": "npm run desktop:build && electron-builder --mac dir dmg zip --arm64",
+    "test:pptx": "node scripts/pptx-smoke.mjs",
+    "icons": "node scripts/build-icons.mjs"
   },
   "devDependencies": {
     "@types/node": "24.0.0",
@@ -56,15 +57,35 @@
       "desktop/presentation/**/*",
       "package.json",
       "skills/**/*",
-      "examples/starter/**/*"
+      "examples/starter/**/*",
+      "examples/tutorial/**/*",
+      "assets/**/*",
+      "LICENSE",
+      "LICENSE_SCOPE.md",
+      "install.md"
     ],
     "mac": {
       "category": "public.app-category.productivity",
       "identity": null,
       "target": [
+        "dmg",
         "zip"
-      ]
+      ],
+      "icon": "assets/playbook.icns"
     },
-    "npmRebuild": false
-  }
+    "npmRebuild": false,
+    "extraResources": [
+      {
+        "from": "dist/index.d.ts",
+        "to": "app/dist/index.d.ts"
+      }
+    ],
+    "artifactName": "Playbook-macos-${arch}.${ext}"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jakara/playbook.git"
+  },
+  "author": "jakara"
 }

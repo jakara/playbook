@@ -1,162 +1,120 @@
-# Playbook
+<p align="center"><img src="assets/playbook-mark.svg" width="88" alt="Playbook：书本与播放三角"></p>
+<h1 align="center">Playbook</h1>
+<p align="center"><strong>the show must go on</strong></p>
+<p align="center">让软件自己演示，把讲解与操作编成一本可播放的手册。</p>
+<p align="center"><a href="https://github.com/jakara/playbook/releases/latest">下载</a> · <a href="install.md">安装指引</a> · <a href="#快速开始">快速开始</a> · <a href="skills/playbook-wright/SKILL.md">基础接入 Skill</a> · <a href="docs/architecture.md">技术架构</a></p>
 
-用自己的智能体配合 Playbook Skill，把需求、手工操作流程或已有 Playwright TC 整理成可讲解、可操作、可验证的演示，再继续复用于自动化测试。
+Playbook 是面向软件演示、客户培训和流程讲解的桌面播放器。它真正操作页面：展示开场、指向组件、解释功能，再完成操作与结果检查。演示可以自动播放，也可以在合适的位置停下来，让观众亲自试一试。
 
-**v0.4 增加 PPTX 导出，保留页面截图、内嵌语音、自动换页与演讲者备注。** 项目仍是本地文件夹，左侧只展示“项目文件夹 → Book”两层树。首先展示 Book 列表，选中后右侧展示详情，Section 用 Tab 组织，脚本在对应 Tab 下平铺。智能体负责创作、维护、讲解调整和编排；Electron 客户端负责只读项目浏览、搜索、详情、环境选择、播放控制、运行反馈，以及按明确选择安装随包 Skill。应用内没有脚本编辑器、聊天窗口或模型账户。
+**用你自己的智能体创作，用 Playbook 播放。** 客户端与 SDK 公开源码，业务脚本留在自己的项目里。客户端负责浏览、搜索和播放，无需再配置一套模型账户，也没有内置聊天或脚本编辑器。
 
-演示在独立 Google Chrome 中运行，不是嵌入客户端的 WebView。Playwright 执行原生动作和断言，Driver.js 与本地呈现层提供开场、章节、箭头提示、蒙层、光圈和演示光标。播放进度和控制属于客户端的原生透明置顶悬浮条，不注入业务页面。
+公开的 `playbook-wright` 是 **community-bootstrap 基础版**，只提供安装与项目接入引导，不包含专业创作、维护和测试转换工作流。专业 Skill 计划通过 WorkBuddy 市场另行分发，目前尚未上架；公开仓库和下载包不会提供专业版。
 
-## 当前交付
+书本代表可组织的操作手册，播放三角代表可执行的演示。项目文件夹里放 Book，Book 由 Section 和脚本组成；可以播放单个流程，也可以按顺序播放整节、整本。
 
-| 内容 | 当前功能 |
+## 下载与安装
+
+当前交付平台为 **macOS Apple Silicon（M 系列芯片）**。
+
+| 方式 | 入口 |
 |---|---|
-| 只读项目 | 添加/移除项目登记，读取 `.playbook.json`，浏览 Book、Section 和脚本，按名称、摘要、标签、角色搜索 |
-| 容器与脚本详情 | 展示内容、顺序、步骤、数据环境、操作影响和重播要求；选择已有 Profile |
-| 播放器 | 独立 Chrome、引导呈现、原生动作与结果检查、暂停、继续、停止、从头再播 |
-| 柔边与打码 | 光圈渐变柔边可调；按 CSS 选择器覆盖或模糊页面区域，跟随滚动和页面更新，不拦截原生交互 |
-| PPTX 导出 | Book/Section/单脚本重新回放生成 16:9 截图课件，按讲解节奏自动换页，内嵌语音，讲解文字写入演讲者备注；成功后打开或定位文件 |
-| 同步语音 | 默认关闭；macOS 本地文字朗读，或播放工作区内录音；讲解与最短停留都完成后再操作，随暂停/继续/停止同步 |
-| 分层播放 | Book 与 Section 各有“播放全部”，按清单数组顺序串行执行；每个脚本独立准备与释放页面上下文 |
-| 全局播放控制 | 原生悬浮条可拖动、可最小化，约 3 秒无输入自动隐藏，鼠标或键盘活动后显现；恢复播放时置前受控 Chrome；默认 `CommandOrControl+Alt+P`（Mac 为 `⌘⌥P`）播放/暂停，注册失败提示 |
-| 运行反馈 | 当前步骤、进度、成功/失败/停止记录；复制修改或错误上下文给自己的智能体 |
-| 文件变化 | 定期重新发现资产；本轮执行已构建快照，源文件变化提示下一轮生效 |
-| Skill 安装 | 随包 `playbook-wright`，支持 Codex / Claude Code 的个人或指定项目目标；预览、安装、更新、冲突保护和备份核验 |
-| 样例与测试复用 | `examples/starter` 是客户端入门样例；`examples/catalog` 保留原始 TC、共享流程 TC 与独立导出 TC |
+| 磁盘映像 | [Playbook-macos-arm64.dmg](https://github.com/jakara/playbook/releases/latest/download/Playbook-macos-arm64.dmg) |
+| 压缩包 | [Playbook-macos-arm64.zip](https://github.com/jakara/playbook/releases/latest/download/Playbook-macos-arm64.zip) |
+| 全部发布资产与校验值 | [GitHub Releases](https://github.com/jakara/playbook/releases/latest) |
+| 让智能体完成安装 | [install.md](install.md) |
 
-功能实现与验收结论分开记录。具体检查范围、结果和证据见 [验收记录](docs/verification.md)。
+可以把下面这句话交给你的智能体：
 
-**业务演示资产归属业务仓库。** 艺工现有样例保留在艺工仓库的 `demos/guided-replay`，没有复制进产品。产品内置的是无账号的合成教学页面，不是艺工业务验收证据。
+> 请读取 https://raw.githubusercontent.com/jakara/playbook/main/install.md ，为我的 Codex 安装 Playbook 和用户级基础接入 Skill；先检查现有安装，复用兼容应用，核验官方发布文件，并在完成后说明如何调用。
 
-## 启动、构建与打包
+需要 Claude Code 或指定项目安装时，在请求中写明框架和项目绝对路径。[安装指引](install.md)包含固定发布版本、SHA-256 校验、应用复用、两个 Skill 入口和冲突保护的完整步骤。具体资产以正式发布的 Release 为准。
 
-源码开发需要 Node.js、npm 和本机 Google Chrome。在仓库根目录执行：
+分发包目前**未签名、未公证**，macOS 可能提示无法验证开发者。请从官方仓库下载、核对校验值，并按系统提供的界面处理；安装指引不会关闭 Gatekeeper 或清除隔离属性。尚未交付 Intel Mac、Windows 或 Linux 安装包。
+
+## 快速开始
+
+1. 安装并打开 Playbook。发布包自带运行环境，使用客户端不需要安装 Node.js、npm 或启动本地 Node 服务。
+2. 播放首页的 **Playbook 使用教程**。教程默认留在内置浏览器中；大部分步骤使用独立练习数据，在 Skill 安装环节会明确交还操作权，你可以真实安装，也可以继续或等待跳过。
+3. 按需安装基础接入 Skill，在智能体中重新加载或开启新会话，调用 `$playbook-wright`。旧调用名 `$playbook-playwright` 仍可用；这两个公开入口均为基础版。
+4. 从公开的 [入门样例](examples/starter/.playbook.json) 和 [SDK 类型](src/index.ts) 接入自己的项目。在客户端“添加项目”，选择包含 `.playbook.json` 的文件夹，打开 Book 并播放。专业作者工作流由单独分发的专业 Skill 提供。
+
+例如：
+
+> 使用 $playbook-wright，检查 Playbook 是否安装，并帮助我确认当前项目的接入条件。
+
+业务服务、登录和数据准备由项目自己的 Profile 提供。先在适合演示的环境验证，再用于客户场景。内置浏览器无需另装 Chrome；外部浏览器模式需要本机 Google Chrome。
+
+## 能做什么
+
+| 能力 | 使用方式 |
+|---|---|
+| 可播放的手册 | 项目 → Book → Section → 脚本；搜索、详情、整节与整本顺序播放 |
+| 引导与自动操作 | 开场、章节、箭头、蒙层、柔边光圈、演示光标；原生 Playwright 操作和断言 |
+| 自动讲解 + 真人实操 | 讲解后交还页面，限时或等待明确继续；操作时重置计时，文件选择和安装期间冻结 |
+| 同步语音与打码 | macOS 本机 TTS 或工作区录音；按选择器覆盖或模糊指定区域 |
+| 内置或外部播放 | 内置浏览器顶部控制栏；外部 Chrome 配原生悬浮条；全局播放/暂停快捷键 |
+| PPTX 课件 | 回放自动流程，以截图构建幻灯片，嵌入语音、按讲解换页，讲稿写入演讲者备注 |
+| 演示与测试复用 | SDK 保留原生 Playwright 动作与断言，支持测试入口复用；专业 Skill 提供作者侧适配工作流 |
+| 反馈与恢复 | 执行快照、运行记录、分别记录执行/清理错误；可选 Profile 幂等恢复入口 |
+
+默认全局快捷键为 **⌘⌥P**。外部播放栏可以拖动、收起，空闲后隐藏，输入时显现。快捷键注册失败会在客户端提示。
+
+浏览和搜索不改写业务文件。项目可以移出，Book 可以经确认删除；普通 Book 删除会备份并修改清单，保留脚本、Profile 和运行记录。内置项目的移出/删除状态单独保存在本机。脚本内容和效果调整仍交给智能体完成。
+
+## 你的项目仍属于你
+
+```text
+business-project/
+  .playbook.json
+  demos/
+    flows/*.playbook.ts
+    profiles/*.profile.ts
+    audio/                     # 可选本地录音
+```
+
+清单保存 Book、Section 和顺序，脚本保存动作、断言、讲稿与呈现参数，Profile 负责环境准备和资源释放。业务演示资产留在业务仓库；产品内置合成教程和样例不作为业务验收证据。
+
+- [入门样例](examples/starter/.playbook.json) / [SDK 类型与执行入口](src/index.ts)
+- [技术架构与公开契约](docs/architecture.md) / [产品方案](docs/product-plan.md)
+- [基础安装与接入引导](skills/playbook-wright/SKILL.md) / [验证记录](docs/verification.md)
+
+## 开发
+
+开发环境需要 Node.js、npm；外部浏览器及相关测试需要 Google Chrome。应用基于 Electron、React、TypeScript、Playwright 和 Driver.js。
 
 ```sh
 npm ci
 npm start
 ```
 
-`npm start` 先构建核心契约、Electron 主进程/运行器和 React 界面，再启动桌面应用。初次打开会展示内置入门项目，可直接播放样例或添加自己的业务项目。
-
-只构建、不启动：
-
 ```sh
-npm run desktop:build
+npm run desktop:build  # 构建客户端
+npm run check          # 核心、类型、样例与正反向检查
+npm run desktop:check # 桌面自动检查
+npm run desktop:smoke # 已构建客户端 + 隔离临时项目
+npm run package:mac   # macOS Apple Silicon 分发包
 ```
 
-核心代码输出到 `dist/`，桌面入口、运行器与界面输出到 `build/`。
+品牌源文件为 [assets/playbook-mark.svg](assets/playbook-mark.svg)，修改后用 `npm run icons` 生成应用图标。此步使用本机 Chrome 和 macOS 图标工具。
 
-在 macOS 上构建 Apple Silicon 应用和 ZIP：
+`@playbook/core` 是仓库内 SDK 包名，尚未发布到 npm；桌面打包器使用应用自带 SDK。项目自身的其他依赖、服务和账号仍由项目提供。发布资产与版本管理见 [发布维护](docs/releasing.md)。
 
-```sh
-npm run package:mac
-```
+## 使用边界
 
-输出位于 `release/`，应用目录为 `release/mac-arm64/Playbook.app`。当前包未启用签名、公证或自动更新。打包后的应用携带运行所需的 Node 环境和产品依赖，不要求用户另装 Node 或启动 Node 服务；**仍需要本机 Google Chrome**，以及业务 Profile 所需的服务、账号和外部条件。
+- **播放会执行可信本地代码。** 运行器是故障隔离进程，不是恶意脚本沙箱。只播放你信任、已核对目标环境和操作影响的项目。
+- **停止不等于回滚。** 应用取消执行，再独立清理并保存回执。强杀无法保证回调执行；恢复需要 Profile 事先声明精确句柄与幂等入口，旧 Profile 或版本不匹配时需人工核对。见 [技术架构](docs/architecture.md)。
+- **手动等待不等于业务成功。** 继续或超时后仍需实际 verify。含手动步骤的流程不能直接导出 PPTX，需另备已授权的纯自动版本。
+- **打码是呈现效果。** DOM/API 原值仍存在，模糊也不保证不可辨认，不能替代业务脱敏。
+- **浏览器能力需核对。** 内置模式以单个主页面为主，会拦截网页弹窗；多窗口、Chrome 扩展等特殊流程应选择外部模式并单独适配验证。
+- **PPTX 会重新执行流程。** 它不是连续录屏，控件不可单独编辑。声音和计时应在实际使用的演示软件中验收；失败或停止不覆盖旧目标。见 [技术架构](docs/architecture.md)。
+- **转换需要适配。** TC 的 fixture、登录、数据、断言、清理和复杂浏览器能力须逐项映射，不能把任意测试文件直接当演示播放。
 
-## 接入自己的项目
+客户端没有模型账户，不自动把业务内容发送给外部智能体。使用你自己的智能体产生的模型费用由该环境决定。当前平台与通过项以 [验证记录](docs/verification.md) 为准；实现细节见 [技术架构](docs/architecture.md)，产品取舍见 [产品方案](docs/product-plan.md)。
 
-让自己的智能体使用 [Playbook Skill](skills/playbook-wright/SKILL.md)，先从 [完整能力索引](skills/playbook-wright/references/capabilities.md) 了解功能，按当前 [契约](skills/playbook-wright/references/contract.md) 维护工作区。参考布局：
+## 许可
 
-```text
-business-project/
-  .playbook.json                 # 项目、Book/Section 顺序、脚本与环境引用
-  demos/flows/*.playbook.ts      # 业务动作、断言、讲解与呈现参数
-  demos/profiles/*.profile.ts    # 环境准备、角色与资源释放
-  demos/audio/*                 # 可选的本地讲解录音
-```
+客户端与 SDK 由 **jakara** 以 MIT 许可发布，见 [LICENSE](LICENSE) 和 [许可范围](LICENSE_SCOPE.md)。公开基础接入引导的适用范围同样以许可范围说明为准。
 
-实际清单见 [入门样例](examples/starter/.playbook.json)。Book 使用 `sections` 数组，Section 的 `scripts` 数组引用已注册流程 ID。两级“播放全部”都按数组顺序执行，使用所选同一 Profile；各脚本独立 prepare/release，不共享上一脚本的页面和内存。旧 `demos` 清单兼容归一为 Book 和 Section，应用不改写源文件。
+专业 Skill 不纳入上述 MIT 许可，不进入公开源码和分发包，后续通过 WorkBuddy 市场单独分发；目前尚未上架，没有购买链接。
 
-脚本须使用可静态读取的默认导出，例如 `export default definePlaybook({ ... })`；名称、要求和步骤说明等元数据直接写在 literal 对象中。浏览项目只解析元数据，不为显示标题执行脚本。“项目”和技术接口中的 workspace 指同一目录，没有另一份可编辑资料库。
-
-先检查工作区发现、引用和构建是否可用：
-
-```sh
-npm run desktop:build
-./node_modules/.bin/electron . --check-workspace "/absolute/path/to/business-project"
-```
-
-打包后的应用也可检查，无需外置 Node：
-
-```sh
-"/absolute/path/to/Playbook.app/Contents/MacOS/Playbook" --check-workspace "/absolute/path/to/business-project"
-```
-
-命令输出 JSON，成功退出码 `0`，失败为 `1`。它检查静态元数据、文件引用、脚本与 Profile 选择，以及能否生成运行 bundle；不打开业务 Chrome、不执行 Profile 或步骤，也不进行 TypeScript 完整类型检查。类型、业务动作和断言仍需各自验证。检查产物写应用用户数据目录，不写回业务源文件。
-
-随后在“项目”点击“添加项目”，选择包含 `.playbook.json` 的目录。**点击播放会构建并执行该项目中的可信本地 TypeScript。** 客户端对业务资产只读，并不代表业务操作只读；脚本可以按声明写入业务数据。独立运行器用于生命周期与故障隔离，不是限制本地脚本权限的沙箱。
-
-播放中可使用原生悬浮条或 `⌘⌥P` 暂停/继续；继续时先恢复并置前本轮 Chrome。拖动播放栏的文字或空白区域可调整位置，右侧“−”收成小条，点击“↗”展开；位置和收起状态在本次应用会话中保留。无运行任务时，快捷键播放主界面当前选择；终态可从头重播，仍受脚本重播条件限制。悬浮条按系统空闲时间和鼠标坐标判断活动，不记录按键内容，也无需额外全局键盘 hook 依赖。快捷键可能与系统或其他应用冲突，注册失败会在客户端明确显示。
-
-## 导出 PPTX
-
-在 Book、Section 或脚本详情点击“导出 PPTX”，选择保存位置后，应用会重新执行所选流程。课件按顺序包含开场、章节、操作前引导、操作后结果及完成提示；结果页隐藏引导层并保留打码。导出仍执行原始断言和 prepare/release，遵守同一 Profile 与重播要求，不会撤销已完成的业务操作。全部成功后保存，失败或停止不覆盖原目标文件。
-
-语音、停留设置和最短阅读时间共同决定换页时间，旁白增加 1 秒启动/句尾余量，换页向上取整到整秒；章节/结果至少 2 秒，其余页面至少 3 秒。输入暂停、接口等待、语音生成与文件处理耗时不计入课件节奏。音频使用内嵌 WAV，离开原机器也不依赖录音路径。备注优先采用自定义旁白文字，否则使用开场 title/summary 或步骤 explain；本地录音不自动转录。未启用语音的步骤保持静音。更长的结果阅读时间可通过现有 afterMs 调整，不新增导出脚本字段。
-
-完成后在当前页面或运行记录打开文件，在演示软件中进入幻灯片放映并启用计时/声音。截图是关键状态，业务控件不能在 PPT 中单独编辑，也不连续播放鼠标动画。详细节奏与目标播放器验证边界见 [Skill 导出指引](skills/playbook-wright/references/pptx-export.md)。
-
-## 柔边、打码与语音
-
-这些设置由自己的智能体维护在 `.playbook.ts`，客户端仍只读播放。放在流程的顶层 literal 对象中，例如：
-
-```ts
-presentation: { spotlightFeather: 32 }, // 0–100 px，默认 24
-redactions: [
-  { selector: '[data-demo="logo"]', mode: 'cover', label: '品牌已遮盖', padding: 4 },
-  { selector: '[data-demo="customer-name"]', mode: 'cover' },
-],
-narration: { enabled: true, voice: 'Tingting', rate: 185 },
-```
-
-打码默认使用不透明覆盖，也可指定 `mode: 'blur'` 与 `blurPx`。选择器需匹配实际页面，遮盖随滚动、重渲染、弹窗和同一主页面导航重新定位。它只改变观看效果，**原值仍在 DOM/API 中，不能替代业务安全脱敏**；blur 也不保证内容不可辨识。演示数据、讲稿和录音本身须适合目标观众。
-
-语音默认关闭。启用后，开场读 title 与 summary，每步读 explain；可用流程 `narration.opening` 和单步 `narration` 设置 `{ text: '讲稿' }`、`{ audio: 'demos/audio/search.mp3' }` 或 `false`。文字与录音二选一；单步对象可独立启用。录音支持工作区内相对路径的 wav/mp3/m4a/ogg，单文件最多 20 MB，并随本轮快照冻结。
-
-macOS 通过本地 `say` 生成 WAV，默认中文声线 Tingting、语速 185 words/min，无需云账户；所选声线须在本机可用。其他平台暂使用本地录音。当前讲解与最短停留均完成后再操作；暂停、继续、停止同步控制语音，无法生成或播放会明确失败。TC 复用和独立导出忽略柔边、打码与语音元数据，保留业务动作和断言。
-
-## 安装 Skill 与创作
-
-主 Skill 已改名为 `playbook-wright`，推荐使用 `$playbook-wright`；安装器同时安装 `playbook-playwright` 兼容入口，旧 `$playbook-playwright` 仍可调用同一主指引。两个目标分别检查、备份与核验，不覆盖本地修改而不提示。
-
-进入“Skill 安装”，选择框架、个人或指定项目范围。项目安装点击“选择文件夹”指定智能体打开的项目目录，可以随时更换；不必已登记到 Playbook，也不要求已有 .playbook.json。目标按所选框架追加固定的 Skill 子目录，核对完整路径、版本与已有内容后点击安装。选择文件夹与预览不写入，也不登记演示项目；内置样例不作安装目标。
-
-更新会先备份；发现修改或冲突时，须明确勾选“先备份再替换已有内容”。符号链接目标不写入，同版本且校验一致时不重复安装。安装器不修改全局规则、hooks、模型设置或凭据；文件安装成功不等于目标智能体已加载，仍需在该智能体中确认。
-
-请求示例：
-
-> 使用 `$playbook-wright`，为首次使用的老师设计一段课程查找和任务预览演示，补齐必要信息并生成可验证的 Playbook script。
-
-> 使用 `$playbook-wright`，把任务预览多停留四秒，提示改到下方；保留原业务动作与断言。
-
-> 使用 `$playbook-wright`，将光圈边缘变柔和，遮盖页面 logo 和客户姓名，并用本地中文语音同步讲解；保持现有业务操作和断言。
-
-> 使用 `$playbook-wright`，将指定 Playwright TC 转为演示流程，保留原断言、fixture 和数据边界，列出未映射依赖与验证结果。
-
-> 使用 `$playbook-wright`，把指定 Playbook 脚本导出为独立 Playwright TC，保留准备、断言和清理逻辑。
-
-客户端只复制上下文到剪贴板，不自动发给智能体或上传外部模型。TC 转换是 Skill 辅助的提取、适配与验证，不承诺任意测试文件一键全自动转换。
-
-## 检查命令
-
-```sh
-npm run check
-npm run desktop:check
-npm run desktop:smoke
-```
-
-- `check`：核心类型、转换样例、执行语义与正反向浏览器检查。
-- `desktop:check`：桌面发现/选择/构建、播放控制时序、原生控制窗位置及 Skill 安装器自动检查。
-- `node scripts/presentation-smoke.mjs`：用隔离页面和真实 Chrome 检查柔边、动态打码、中文朗读/录音及暂停继续、停止和音频错误；需要 macOS 本机语音。
-- `desktop:smoke`：用当前已构建的 Electron、隔离临时工作区和应用数据做端到端检查；先执行 `desktop:build`，需要本机 Chrome。它是合成样例验收，不替代真实业务集成。
-
-## 当前限制与后续路线
-
-当前开发及实测覆盖范围为 macOS Apple Silicon，具体通过项以验收记录为准。尚未完成 Intel、Windows、Linux 或干净机器验收；分发包尚无签名、公证与自动更新。
-
-首版依赖本机 Chrome，使用独立临时浏览器上下文，不连接日常浏览器会话。当前引导以单个主页面为范围；跨窗口、复杂 frame、上传下载与系统对话框仍需专门适配和验收。
-
-静态发现要求默认导出的 literal 元数据，运行器不自动安装业务依赖。登录、数据重置与资源清理由业务 Profile 提供并验证。暂停和停止在运行边界生效，已发出的操作不会自动回滚。
-
-后续兼容性、发布加固和未实现能力见 [产品方案](docs/product-plan.md) 与 [技术架构](docs/architecture.md)。`@playbook/core` 当前是本仓库本地包名，尚未发布到 npm。
+已有公开 Git 历史保留。本次 MIT 授权不对历史专业 Skill 内容重新授予许可，也不表示已经收回或抹除过去公开的内容。

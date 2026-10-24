@@ -18,6 +18,7 @@
     popoverClass: 'ygd-popover',
   });
   function bringForward(element) {
+    root.style.removeProperty('display');
     if (root.matches(':popover-open')) root.hidePopover();
     const parent = element?.closest('dialog[open]') || document.querySelector('dialog[open]') || document.body;
     if (root.parentElement !== parent) parent.append(root);
@@ -65,7 +66,8 @@
   function clickEffect() {
     cursor.classList.remove('ygd-click'); void cursor.offsetWidth; cursor.classList.add('ygd-click');
   }
-  window.playbookGuide = { configure, center, highlight, state, place: ({ x, y }) => place(x, y), detach, clickEffect, position: () => position, bringForward,
+  function interactive() { driver.destroy(); card.hidden = true; cursor.hidden = true; root.dataset.phase = 'waiting'; root.style.setProperty('display', 'none', 'important'); if (root.matches(':popover-open')) root.hidePopover(); }
+  window.playbookGuide = { interactive, configure, center, highlight, state, place: ({ x, y }) => place(x, y), detach, clickEffect, position: () => position, bringForward,
     inspect: () => ({ phase: root.dataset.phase, x: position.x, y: position.y, apertureX: Number(hole.getAttribute('cx')), apertureY: Number(hole.getAttribute('cy')), spotlightFeather: feather, cardVisible: !card.hidden, popoverVisible: !!document.querySelector('.ygd-popover') }) };
   place(position.x, position.y);
 })();

@@ -128,6 +128,8 @@ async function examine({ sourceDir, targetDir, version }) {
   const state = (status, message, record) => ({ source, target, record, result: { ...base, status, ...(record ? { installedVersion: record.version } : {}), message } });
   if (!target) return state('new', '尚未安装，可安装内置 Skill。');
   const record = target.get(RECORD)?.type === 'file' ? validRecord(target.get(RECORD).data, skill) : null;
+  const bootstrap = nodes => /(?:^|\n)\s*edition:\s*community-bootstrap(?:\s|$)/.test(nodes.get('SKILL.md')?.data?.toString('utf8') || '');
+  if (bootstrap(source) && !bootstrap(target)) return state('conflict', '目标不是公开基础引导，可能包含完整或专业 Skill；不会自动降级替换。请保留专业内容，确需改装时先明确确认并完整备份。', record);
   if (!record || target.get('')?.type !== 'directory') return state('conflict', '目标已存在且不属于可识别的 Playbook 安装；替换前须确认并备份。');
   const hashes = fileHashes(target);
   const modified = Object.entries(record.files).some(([name, hash]) => hashes[name] !== hash);

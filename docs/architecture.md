@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-21。客户端 v0.4.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.7.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-24。客户端 v0.6.3，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.9.2。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -16,6 +16,9 @@ flowchart LR
   Cache --> Runner
   Runner --> PW[Playwright 原生动作与断言]
   PW --> Chrome[独立 Google Chrome]
+  PW -->|本机 CDP| Embedded[Electron WebContentsView]
+  Main --> Embedded
+  Guide --> Embedded
   Runner --> Guide[Driver.js + 本地呈现层]
   Guide --> Chrome
   Runner --> Audio[本地朗读或快照录音]
@@ -28,7 +31,7 @@ flowchart LR
 | 模块 | 当前职责 | 写入边界 |
 |---|---|---|
 | 用户智能体 + Skill | 需求引导、脚本创建/维护、讲解与效果调整、Book/Section 编排、测试转换和修复 | 用户的创作环境维护业务资产 |
-| `ui/` | 文件夹/Book 两层树、Book 列表、Section Tab、脚本详情、搜索、环境选择、播放控制、记录与安装页 | 无业务文件写入 API |
+| `ui/` | 文件夹/Book 两层树、Book 列表、Section Tab、脚本详情、搜索、环境选择、播放控制、记录与安装页 | 确认删除 Book 时调用受限清单维护入口；无通用文件编辑 API |
 | `desktop/preload.cjs` | 有限的 `window.playbook` 方法与完整状态订阅 | 不暴露任意文件系统、`ipcRenderer` 或代码执行接口 |
 | `desktop/main.mjs` | 项目登记、重新发现、选择校验、构建调度、运行器生命周期、原生悬浮窗、活动检测、系统快捷键、记录与剪贴板 | 应用设置、备份、记录、缓存与显式 Skill 安装 |
 | `desktop/playback-control.mjs` | 原生悬浮窗生命周期、位置、活动显隐与受限控制状态 | 不写业务资产或记录按键内容 |
@@ -38,7 +41,7 @@ flowchart LR
 | `desktop/skill-installer.mjs` | 预览、版本/摘要识别、备份、替换核验与失败恢复 | 选定的本 Skill 目录及应用备份 |
 | `src/index.ts` | 类型契约、`definePlaybook`、`defineProfile` 和测试复用参考执行器 | 业务准备与资源仍由调用者负责 |
 
-主窗口关闭 Node 集成，启用 `contextIsolation` 和 `sandbox`。业务页面只在独立 Chrome，不加载 Electron preload。运行器是独立 Node 进程，但脚本与 Profile 仍是可信本机代码；独立进程不是恶意代码权限沙箱。
+主窗口关闭 Node 集成，启用 `contextIsolation` 和 `sandbox`。业务页面可在外部 Chrome 或内置 WebContentsView，普通业务页面不加载客户端 preload。仅可核验的内置教程会取得三个受限 Skill 方法；写入另需匹配的手动步骤和用户点击。运行器是独立 Node 进程，但脚本与 Profile 仍是可信本机代码；独立进程不是恶意代码权限沙箱。
 
 ## 创作、发现与反馈
 
@@ -47,6 +50,8 @@ flowchart LR
 用户界面统一使用“项目”。一个项目对应含 `.playbook.json` 的已登记目录，API 中的 workspace 指同一对象，不存在另一份独立资料库。左侧导航仅显示项目文件夹 → Book 两层；进入时展示 Book 列表，选中后侧边栏变窄，右侧完整展示 Book。Section 使用带键盘切换的 Tab，脚本在所属 Tab 下平铺，步骤在同一内容区查看。清单内仍按 Book → Section → 脚本组织，按名称、摘要、清单标签和角色搜索。详情展示内容顺序、说明、步骤、数据类别、数据影响与重播要求；可选择已有 Profile、显示源文件位置或复制修改上下文。
 
 反馈通过剪贴板交接，包含工作区、脚本/流程引用、运行状态、构建摘要和错误；用户自行粘贴给智能体。应用不自动发送任务消息或上传业务内容。
+
+内置教程和入门样例也允许移出项目或删除 Book。删除状态按稳定的 tutorial/starter 标识和 Book ID 保存到本机设置，发现时过滤；不改写随包清单。刷新、重启和安装目录变化不会重新加入；明确添加项目只恢复项目登记，不恢复已删除 Book。设置 schemaVersion 1 保持兼容，可选 hiddenBuiltins/hiddenBuiltinBooks 字段，写入前备份并核验，包括初始默认设置。
 
 ## 工作区发现契约
 
@@ -105,7 +110,7 @@ Book 和 Section 是引用与顺序容器，没有独立业务 callbacks。Book�
 
 ## Profile 与数据边界
 
-Profile 默认导出 `defineProfile({ ... })`，提供 `schemaVersion`、`id`、`title`、`dataMode`、`roles` 和 `prepare({ page, workspaceDir, parameters })`。成功返回 `{ context, release? }`，`context.page` 必须是运行器提供的页面。Profile 负责业务地址、登录、角色、前置数据与自身资源，部分准备失败的内部清理也须自行保证。
+Profile 默认导出 `defineProfile({ ... })`，提供 `schemaVersion`、`id`、`title`、`dataMode`、`roles` 和 `prepare({ page, workspaceDir, parameters })`。成功返回 `{ context, release? }`，`context.page` 必须是运行器提供的页面。Profile 负责业务地址、登录、角色、前置数据与自身资源，旧 Profile 仍自行处理部分准备失败；新 Profile 可在资源创建前 await registerCleanup，让应用提前保存责任。返回 release 先登记，再校验 context.page。
 
 运行器校验脚本 schema、数据类别和所需角色。`reset-required` 要求 Profile 声明 `resetBeforeRun: true`；实际重置仍由 Profile 实现并验证，声明本身不会重置数据。`single-run` 在开始执行前持久化执行占用，避免直接重播已可能产生作用的流程；后续须先核对数据并完善恢复策略。
 
@@ -149,13 +154,13 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 `runPlaybook` 的测试入口不处理柔边、打码或语音，也不增加相应等待。Skill 独立导出 TC 时移除这些元数据和资源调用，保留动作、断言与测试生命周期，不将遮盖转成 DOM 修改或测试步骤。
 
-暂停在说明计时、光标移动和步骤边界检查。进行中的业务动作先进入“正在暂停”，待边界后暂停，不撤回已发出的请求。继续时，运行器先用该页面的 CDP 会话查询并恢复最小化的 Chrome 窗口，再调用 `page.bringToFront()`，之后才释放暂停。恢复期间收到较新的暂停或停止会覆盖先前继续请求。停止中断后续调度并关闭本次 Chrome，主进程超时回收；已完成的业务写入不会自动回滚。终态可从客户端重播，仍经过数据策略校验。
+暂停在说明计时、光标移动和步骤边界检查。进行中的业务动作先进入“正在暂停”，待边界后暂停，不撤回已发出的请求。继续时，运行器先用该页面的 CDP 会话查询并恢复最小化的 Chrome 窗口，再调用 `page.bringToFront()`，之后才释放暂停。恢复期间收到较新的暂停或停止会覆盖先前继续请求。停止取消独立的执行 signal、旁白和后续调度，不提前关闭 Chrome 破坏 Profile 留证。不配合取消的代码超过停止宽限后记为执行和清理未知，再终止运行器；不会自动回滚已完成写入。终态可从客户端重播，仍经过数据策略校验。
 
-成功、失败和停止均尝试 release。完成/失败页面可留在独立 Chrome 供查看，下一轮或退出时回收；停止会关闭本次浏览器。当前引导范围为单个主页面，跨窗口、frame、上传下载及系统对话框需单独适配验收。
+成功、失败和停止均按登记逆序执行清理，同函数 identity 去重，单轮不自动重试。每次 prepare 对应的整组清理默认 60 秒预算，与默认 30 秒执行停止宽限分开，不继承已取消的 signal。分别保存业务与清理错误，清理后复查停止意图才确认终态；之后回收失败和停止的浏览器。当前引导范围为单个主页面，跨窗口、frame、上传下载及系统对话框需单独适配验收。
 
 ## 原生全局悬浮控制
 
-进度与控制由客户端的透明置顶 `BrowserWindow` 展示，独立于业务 Chrome 和页面 DOM。浏览器注入层只负责开场、箭头、蒙层、光圈等引导，不再包含下方进度条或播放控制按钮。原生悬浮窗接收主进程同一份运行状态，通过受限 IPC 发送控制命令，不在页面重复调度动作。
+独立播放的进度与控制由客户端的透明置顶 `BrowserWindow` 展示；内置播放使用主窗口顶部控制栏，隐藏悬浮条以避免遮挡。两者都独立于业务页面 DOM。浏览器注入层只负责开场、箭头、蒙层、光圈等引导，不再包含下方进度条或播放控制按钮。原生悬浮窗接收主进程同一份运行状态，通过受限 IPC 发送控制命令，不在页面重复调度动作。
 
 窗口启用 `movable`，文字与空白区域通过 CSS `-webkit-app-region: drag` 使用系统拖动，按钮显式排除拖动。最小化在受限 IPC 下切为 300×80 小条，展开为 800×104；保留会话内位置和收起状态。仅首次显示、收起/展开、完成拖动或显示器变更时调整位置并限制在可见工作区内，不随输入轮询重新居中。
 
@@ -165,7 +170,7 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 ## 内置 Skill 安装
 
-主 Skill 来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
+公开基础引导来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`；完整专业 Skill 保存在本地忽略目录 `.private/skills/`，不进入公开 Git、应用或 Release。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
 
 | 框架 | 个人目标 | 项目目标 |
 |---|---|---|
@@ -213,3 +218,21 @@ Book/Section/脚本详情经受限 IPC 请求导出。主进程先打开系统�
 所有业务校验和 Profile release 成功后才在缓存构建 deck.pptx。主进程核对停止意图，在用户选择的文件夹内暂存，再一次替换目标；停止、失败不提交半成品。保存提交点同步写入完成状态，避免停止命令把已保存文件误记为未保存。运行记录保存输出路径、页数、内嵌音频页数和总时长，按 runId 打开/定位，renderer 不提供任意写入路径。音频生成、解码、截图、构建或保存失败均可见，不静默跳过。
 
 浏览器操作和呈现阶段仍支持暂停/继续；生成 PPTX 阶段只支持停止，暂停按钮禁用，全局暂停键忽略。缓存保留本轮快照、截图及音频供诊断，遵循现有本机用户数据边界。输出是可分享内容，应检查画面和备注/音频，不将视觉遮盖当作业务数据脱敏。
+
+## 资源回执与重启恢复（v0.5）
+
+`desktop/lifecycle.mjs` 管理每次 prepare 的清理 scope、可选精确恢复句柄、预算与脱敏。registerCleanup 等待主进程将 JSON 责任写入 runs.json 并确认，调用方须 await 后再创建资源。写入串行化，以临时文件、fsync、rename、目录 fsync 提交；不序列化函数或参数凭据。只有 final 回执可落成功终态，晚到结果不覆盖未知状态或吞掉错误。
+
+停止采用首次请求的绝对截止时间，pending 登记不能续期；清理 running 有独立截止时间，主进程另留 2 秒检测无响应，清理结束后最多等待 10 秒最终回执。关窗、Quit、渲染进程异常统一协调停止、清理、保存后退出；预启动等待期间退出也阻止随后启动业务。单一数据目录使用实例锁，worker PID 在 spawn 后持久化。
+
+重启将未结束记录标为未知并保留成功责任和原错。用户点击恢复后核对 lifecycleVersion、应用版本、规范工作区路径/标识/源码 token、Profile 文件、脚本顺序、run/scope/flow 身份和冻结 flow.mjs 的 SHA-256；运行器再核对 Profile.recovery.version。原 worker 仍存活、代码不匹配、旧 Profile 无声明时要求人工核对。恢复只调用 Profile 幂等 recover，不调用 prepare 或业务步骤，不扫描猜测资源，不改变 retain/purge 策略。
+
+已确认成功的责任不会再次恢复；业务删除完成而回执未保存的强杀窗口仍可能重复调用同一 scopeId/cleanupId，业务须幂等。公开接口见 [SDK 类型](../src/index.ts)；专业 Skill 的生命周期指引通过市场另行分发。
+
+## 内置浏览器与手动交接
+
+使用 Electron 的 WebContentsView 展示页面，Playwright 通过本机随机 CDP 端点连接，仍执行原有 Locator、run/verify 和 Profile，不自建另一套动作引擎。主进程只创建和识别本轮 owned target；现有客户端界面、播放条使用另一内存分区，不和演示登录会话共用存储。本轮共用演示上下文，逐脚本新建页面；浏览器弹出窗口当前被阻止，多窗口或多上下文流程使用外部模式。
+
+讲解完成后，interaction.mode=manual 会移除引导遮挡并交还操作，不调用 run。真实输入重置计时，原生选择器/安装任务忙碌时冻结。手动继续或等待到期均保存交接回执，但不写成操作成功；之后仍执行 verify。公开交互接口以 [SDK 类型](../src/index.ts) 为准。
+
+所有临时浏览器缓存使用精确路径、nonce、PID、appid 和归属标记登记；正常退出删除本轮目录，重启只核验已登记的死进程会话，不扫描其他临时目录、业务资源或证据。

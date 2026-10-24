@@ -1,6 +1,7 @@
-import { readFile, realpath, stat, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, realpath, stat, mkdir, writeFile, lstat } from 'node:fs/promises';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { atomicJSON } from './lifecycle.mjs';
+import { randomUUID, createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
 import { build } from 'esbuild';
@@ -27,12 +28,15 @@ function literal(node, strict = false) {
   if (ts.isArrayLiteralExpression(node)) return node.elements.map(element => literal(element, strict));
   if (ts.isObjectLiteralExpression(node)) return Object.fromEntries(node.properties.flatMap(property => {
     if (!ts.isPropertyAssignment(property)) {
-      if (strict || ts.isSpreadAssignment(property)) throw new Error('呈现字段与流程对象需要静态字面量，不能展开或动态计算');
+      if (strict || ts.isSpreadAssignment(property)
+        || (property.name && ['playback', 'interaction'].includes(property.name.getText()))) {
+        throw new Error('呈现字段与流程对象需要静态字面量，不能展开或动态计算');
+      }
       return [];
     }
-    if (strict && ts.isComputedPropertyName(property.name)) throw new Error('呈现字段不能动态计算属性名');
+    if (ts.isComputedPropertyName(property.name)) throw new Error('呈现字段不能动态计算属性名');
     const name = property.name.getText().replace(/^['"]|['"]$/g, '');
-    return [[name, literal(property.initializer, strict || ['narration', 'redactions', 'spotlightFeather'].includes(name))]];
+    return [[name, literal(property.initializer, strict || ['playback', 'interaction', 'narration', 'redactions', 'spotlightFeather'].includes(name))]];
   }));
   if (strict) throw new Error('新呈现字段需要静态字面量');
   return undefined;
@@ -57,8 +61,8 @@ export function metadata(source, filename) {
     || !['safe', 'reset-required', 'single-run'].includes(req.replay) || !Array.isArray(req.roles)) throw new Error('环境、数据副作用或重播声明不完整');
   validatePlaybookPresentation(value);
   return { id: value.id, title: value.title, summary: value.summary || '', source: value.source,
-    presentation: value.presentation, narration: value.narration, redactions: value.redactions,
-    requirements: req, steps: value.steps.map(({ id, title, explain, presentation, narration }) => ({ id, title, explain, presentation, narration })) };
+    playback: value.playback, presentation: value.presentation, narration: value.narration, redactions: value.redactions,
+    requirements: req, steps: value.steps.map(({ id, title, explain, presentation, narration, interaction }) => ({ id, title, explain, presentation, narration, interaction })) };
 }
 
 function audioReferences(flow) {
@@ -83,6 +87,7 @@ export async function readWorkspace(directory) {
   const output = { id, path: root, name: path.basename(root), items: [], profiles: [], books: [], demos: [], token: '' };
   try {
     const manifestText = await readFile(await inside(root, '.playbook.json'), 'utf8');
+    output.manifestHash = hash(manifestText);
     const manifest = JSON.parse(manifestText);
     if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.scripts) || !Array.isArray(manifest.profiles)) throw new Error('清单需要 schemaVersion: 1、scripts 和 profiles');
     output.name = manifest.title || output.name;
@@ -169,6 +174,29 @@ export async function readWorkspace(directory) {
     output.token = hash(parts.join('\n'));
   } catch (error) { output.error = error.message; output.token = hash(String(error.message)); }
   return output;
+}
+
+export async function removeBookFromManifest({ workspaceDir, bookId, expectedHash, backupDir }) {
+  if (typeof bookId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(bookId) || !/^[a-f0-9]{64}$/.test(expectedHash || '')) throw new Error('删除目标无效，请从磁盘刷新后重试');
+  const root = await realpath(workspaceDir), filename = path.join(root, '.playbook.json');
+  if ((await lstat(filename)).isSymbolicLink()) throw new Error('清单为软链接，请通过智能体维护原文件');
+  const before = await readFile(await inside(root, '.playbook.json'));
+  if (hash(before) !== expectedHash) throw new Error('清单已更新，请从磁盘刷新后重新确认删除');
+  const manifest = JSON.parse(before.toString('utf8'));
+  if (manifest.schemaVersion !== 1 || !Array.isArray(manifest.scripts) || !Array.isArray(manifest.profiles)
+    || manifest.books !== undefined && !Array.isArray(manifest.books) || manifest.demos !== undefined && !Array.isArray(manifest.demos)) throw new Error('清单无效，未删除 Book');
+  if (![...(manifest.books || []), ...(manifest.demos || [])].some(book => book.id === bookId)) throw new Error('Book 已不存在，请从磁盘刷新');
+  // Remove the same legacy composition too, otherwise it would reappear as a normalized Book.
+  for (const key of ['books', 'demos']) if (manifest[key]) manifest[key] = manifest[key].filter(book => book.id !== bookId);
+  await mkdir(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, `manifest-${randomUUID()}.json`);
+  await writeFile(backupPath, before, { flag: 'wx', mode: 0o600, flush: true });
+  if (!(await readFile(backupPath)).equals(before)) throw new Error('清单备份核验失败，未删除 Book');
+  if ((await realpath(workspaceDir)) !== root || (await lstat(filename)).isSymbolicLink()
+    || !(await readFile(filename)).equals(before)) throw new Error('清单已更新，请从磁盘刷新后重新确认删除');
+  await atomicJSON(filename, manifest);
+  if (!((await readFile(filename)).equals(Buffer.from(JSON.stringify(manifest, null, 2))))) throw new Error('清单写入核验失败，请使用备份核对：' + backupPath);
+  return { backupPath };
 }
 
 export function selection(workspace, entryId, kind, profileId) {

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "title": "Playbook 内置教程",
+  "profiles": [
+    {
+      "id": "playbook-tutorial",
+      "title": "内置教程 · Skill 可手动真实安装",
+      "file": "profiles/desktop.profile.ts",
+      "dataMode": "fixture",
+      "parameters": {}
+    }
+  ],
+  "scripts": [
+    {
+      "file": "flows/browse.playbook.ts",
+      "profile": "playbook-tutorial",
+      "tags": [
+        "入门",
+        "教程",
+        "项目",
+        "Book",
+        "Section",
+        "PPTX"
+      ]
+    },
+    {
+      "file": "flows/playback.playbook.ts",
+      "profile": "playbook-tutorial",
+      "tags": [
+        "教程",
+        "播放",
+        "暂停",
+        "停止",
+        "运行记录",
+        "快捷键"
+      ]
+    },
+    {
+      "file": "flows/skill.playbook.ts",
+      "profile": "playbook-tutorial",
+      "tags": [
+        "教程",
+        "智能体",
+        "Skill",
+        "安装",
+        "playbook-wright"
+      ]
+    }
+  ],
+  "books": [
+    {
+      "id": "playbook-tutorial",
+      "title": "Playbook 使用教程",
+      "summary": "跟着自动操作学习项目、Book 与 Section、播放控制、PPTX 和 Skill。带语音讲解，在客户端内播放；Skill 安装处可暂停并亲自安装。",
+      "profile": "playbook-tutorial",
+      "sections": [
+        {
+          "id": "browse",
+          "title": "认识项目与 Book",
+          "summary": "添加练习项目、搜索、浏览章节与脚本，认识导出入口。",
+          "scripts": [
+            "tutorial.browse"
+          ]
+        },
+        {
+          "id": "playback",
+          "title": "播放与运行记录",
+          "summary": "演练播放、暂停、继续、停止，以及查看和反馈运行结果。",
+          "scripts": [
+            "tutorial.playback"
+          ]
+        },
+        {
+          "id": "skill",
+          "title": "交给自己的智能体",
+          "summary": "选择智能体与安装路径，预览 Skill，并了解创作与验证的分工。",
+          "scripts": [
+            "tutorial.skill"
+          ]
+        }
+      ]
+    }
+  ]
+}
