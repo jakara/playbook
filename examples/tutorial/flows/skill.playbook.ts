@@ -3,14 +3,14 @@ import { definePlaybook } from '@playbook/core';
 
 export default definePlaybook({
   schemaVersion:1,id:'tutorial.skill',title:'交给自己的智能体',
-  summary:'认识随包基础引导，选择框架与项目目录；专业创作 Skill 由市场另行提供。',
+  summary:'安装随包 Skill，选择框架与项目目录，让自己的智能体创作、维护和转换演示。',
   playback:{browser:'embedded'},
   presentation:{spotlightFeather:30,defaultHoldMs:1600,cursorMoveMs:750,openingMs:2400},
-  narration:{enabled:true,voice:'Tingting',rate:200,opening:{text:'最后，认识基础接入引导。专业创作和维护 Skill 通过市场另行提供。'}},
+  narration:{enabled:true,voice:'Tingting',rate:200,opening:{text:'最后，为自己的智能体安装 Playbook Skill，创作、维护演示并复用 Playwright 测试。'}},
   requirements:{dataMode:'fixture',effects:'writes',replay:'safe',roles:[]},
   steps:[
-    {id:'open',title:'打开 Skill 安装',explain:'客户端随包提供 playbook-wright 基础接入引导，保留旧调用名。完整专业创作 Skill 不在此安装包中。',
-      narration:{text:'打开 Skill 安装，为智能体安装基础接入引导。'},presentation:{chapter:'把创作交给智能体'},
+    {id:'open',title:'打开 Skill 安装',explain:'客户端随包提供完整 playbook-wright，支持演示创作、维护和测试转换，也保留旧调用名 playbook-playwright。',
+      narration:{text:'打开 Skill 安装，为智能体安装完整的 Playbook 创作能力。'},presentation:{chapter:'把创作交给智能体'},
       target:({page})=>page.getByRole('button',{name:'Skill 安装',exact:true}),
       run:async({page})=>{await page.getByRole('button',{name:'Skill 安装',exact:true}).click();},
       verify:async({page})=>{await expect(page.getByRole('heading',{name:'playbook-wright',exact:true})).toBeVisible();}},
@@ -33,7 +33,7 @@ export default definePlaybook({
       narration:{text:'先核对路径和版本。稍后可以亲自选择与安装。'},
       target:({page})=>page.locator('.install-preview').first(),
       run:async()=>{},verify:async({page})=>{await expect(page.locator('.target-path').first()).toHaveText('/练习/我的演示项目/.agents/skills/playbook-wright');await expect(page.getByRole('button',{name:'安装 Skill',exact:true})).toBeEnabled();}},
-    {id:'install-now',title:'可选：现在安装 Skill',explain:'现在可以亲自选择智能体、安装位置并点击安装基础引导。内置模式会真实写入你选择的目录；打开选择器或安装期间暂停计时。也可直接继续，未操作时十秒后继续讲解。',
+    {id:'install-now',title:'可选：现在安装 Skill',explain:'现在可以亲自选择智能体、安装位置并点击安装 Skill。内置模式会真实写入你选择的目录；打开选择器或安装期间暂停计时。也可直接继续，未操作时十秒后继续讲解。',
       narration:{text:'现在可以选择位置并亲自安装 Skill。也可以继续观看，十秒后自动继续。'},
       interaction:{mode:'manual',prompt:'现在可以真实安装 Skill：核对框架和目标位置后自行点击安装。操作中暂停计时；也可直接继续。',timeoutMs:10000,onTimeout:'continue'},
       target:({page})=>page.getByRole('button',{name:'安装 Skill',exact:true}),

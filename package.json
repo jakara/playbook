@@ -1,6 +1,6 @@
 {
   "name": "@playbook/core",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "Playbook desktop player and AI-native authoring skill",

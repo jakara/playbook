@@ -8,6 +8,7 @@ import { parseVersion, compareVersions, releaseFiles, stageRelease, validateDist
 import { olderSeriesReleases, publishRelease, verifyUploadedAssets, githubClient } from '../scripts/release.mjs';
 
 const commit = 'a'.repeat(40), otherCommit = 'b'.repeat(40);
+const referenceFiles = ['authoring.md', 'capabilities.md', 'contract.md', 'maintenance.md', 'interaction.md', 'lifecycle.md', 'tc-to-playbook.md', 'playbook-to-tc.md', 'pptx-export.md', 'conversion-report.md'];
 async function write(root, name, value) { await mkdir(path.dirname(path.join(root, name)), { recursive: true }); await writeFile(path.join(root, name), value); }
 async function fixture(t, version = '0.7.1', stage = true) {
   const root = await mkdtemp(path.join(tmpdir(), 'playbook-release-test-'));
@@ -16,6 +17,7 @@ async function fixture(t, version = '0.7.1', stage = true) {
   if (!stage) return { root };
   for (const name of releaseFiles.slice(0, 2)) await write(root, `release/${name}`, `disposable fixture: ${name}`);
   for (const name of ['playbook-wright', 'playbook-playwright']) await write(root, `skills/${name}/SKILL.md`, `name: ${name}\n`);
+  for (const name of referenceFiles) await write(root, `skills/playbook-wright/references/${name}`, `MIT Skill fixture: ${name}\n`);
   await write(root, 'skills/playbook-wright/scripts/install.sh', '#!/bin/sh\nprintf "fixture"\n');
   await write(root, 'build/install-skill.cjs', 'console.log("fixture installer");\n');
   const staged = await stageRelease({ root, commit });
@@ -67,10 +69,12 @@ test('staging contains app files, safe bounded Skill roots, installer and comple
   const archive = path.join(staged.directory, 'playbook-skills.tar.gz');
   const names = execFileSync('tar', ['-tzf', archive], { encoding: 'utf8' }).trim().split('\n');
   assert.ok(names.includes('install-skill.cjs'));
+  for (const name of referenceFiles) assert.ok(names.includes(`skills/playbook-wright/references/${name}`), `Missing full Skill guide: ${name}`);
   for (const name of names) assert.ok(!name.startsWith('/') && !name.split('/').includes('..') && /^(?:skills\/playbook-(?:wright|playwright)(?:\/|$)|install-skill\.cjs$)/.test(name), name);
   const extracted = path.join(root, 'extracted'); await mkdir(extracted);
   execFileSync('tar', ['-xzf', archive, '-C', extracted]);
   assert.equal(await readFile(path.join(extracted, 'install-skill.cjs'), 'utf8'), await readFile(path.join(root, 'build/install-skill.cjs'), 'utf8'));
+  for (const name of referenceFiles) assert.equal(await readFile(path.join(extracted, 'skills/playbook-wright/references', name), 'utf8'), `MIT Skill fixture: ${name}\n`);
   assert.equal((await readFile(path.join(staged.directory, 'SHA256SUMS'), 'utf8')).trim().split('\n').length, 5);
 });
 
@@ -83,13 +87,14 @@ test('staging rejects linked Skill files and leaves a prior complete distributio
   assert.ok(!(await readdir(root)).some(name => name.startsWith('.distribution-')));
 });
 
-test('release bundle excludes private professional Skills and unrelated historical files', async t => {
+test('full MIT Skill bundle still excludes local private files and unrelated historical artifacts', async t => {
   const { root } = await fixture(t);
-  await write(root, '.private/skills/playbook-wright/references/professional.md', 'private fixture that must never be distributed');
+  await write(root, '.private/local-notes.md', 'private fixture that must never be distributed');
   await write(root, 'artifacts/old-skill/SKILL.md', 'historical fixture that must never be distributed');
   const staged = await stageRelease({ root, commit });
   const names = execFileSync('tar', ['-tzf', path.join(staged.directory, 'playbook-skills.tar.gz')], { encoding: 'utf8' });
-  assert.doesNotMatch(names, /\.private|professional|artifacts|old-skill/);
+  assert.doesNotMatch(names, /\.private|local-notes|artifacts|old-skill/);
+  for (const name of referenceFiles) assert.ok(names.includes(`skills/playbook-wright/references/${name}`));
   const packed = execFileSync('tar', ['-xOzf', path.join(staged.directory, 'playbook-skills.tar.gz')], { encoding: 'utf8' });
   assert.doesNotMatch(packed, /private fixture|historical fixture/);
 });
@@ -112,6 +117,9 @@ test('a successful patch verifies and publishes first, then removes only lower p
   assert.ok(github.events.indexOf('publish') < github.events.indexOf('delete:1'));
   assert.deepEqual(github.releases.map(item => item.tag_name).sort(), ['nightly', 'v0.6.9', 'v0.7.2', 'v1.0.0']);
   assert.equal(github.refs.get('v0.7.0'), otherCommit, 'release pruning must preserve old Git tags');
+  const current = github.releases.find(item => item.tag_name === 'v0.7.2');
+  assert.match(current.body, /complete authoring Skill.+MIT/);
+  assert.doesNotMatch(current.body, /commercial|bootstrap|not included/);
 });
 
 test('a new major/minor series preserves all previous series and can become latest', async t => {

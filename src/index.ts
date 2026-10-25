@@ -40,6 +40,8 @@ export interface PlaybookStep<C extends PlaybookContext> {
   presentation?: {
     chapter?: string;
     side?: 'top' | 'right' | 'bottom' | 'left';
+    /** Optional reading highlight based on visible DOM text Ranges. Defaults to element geometry. */
+    spotlight?: 'element' | 'text';
     holdMs?: number;
     afterMs?: number;
   };
@@ -189,6 +191,9 @@ export function validatePlaybookPresentation(book: {
     if (record(step.presentation)) {
       const value = step.presentation;
       if (has(value, 'spotlightFeather')) throw new Error('spotlightFeather belongs to flow presentation');
+      if (has(value, 'spotlight') && !['element', 'text'].includes(value.spotlight as string)) {
+        throw new Error('Invalid presentation spotlight; use element or text');
+      }
     }
     if (has(step, 'redactions')) throw new Error('redactions belong to the flow');
     if (has(step, 'narration')) clip(step.narration, 'step.narration');

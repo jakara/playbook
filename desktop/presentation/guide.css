@@ -30,6 +30,7 @@
 .ygd-ripple { position: absolute; left: -12px; top: -12px; width: 30px; height: 30px; border: 3px solid #2766b9; border-radius: 50%; opacity: 0; }
 .ygd-click .ygd-ripple { animation: ygd-click .65s ease-out; }
 .driver-popover.ygd-popover { min-width: 300px; max-width: 360px; padding: 22px 25px; border-radius: 12px; border: 1px solid #dce6f0; box-shadow: 0 16px 50px #13233d35; font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+.driver-popover.ygd-text-popover { position: absolute; z-index: 2; min-width: 0; max-width: none; margin: 0; pointer-events: none !important; }
 .ygd-popover .driver-popover-title { font-size: 20px; line-height: 1.5; font-weight: 700; color: #1a2c48; padding: 0; }
 .ygd-popover .driver-popover-description { color: #526079; font-size: 15px; line-height: 1.85; margin-top: 9px; }
 .ygd-step-tag { display: block; margin-bottom: 9px; color: #3f71b5; font-size: 11px; font-weight: 650; letter-spacing: .7px; }

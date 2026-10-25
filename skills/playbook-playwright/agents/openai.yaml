@@ -1,0 +1,4 @@
+interface:
+  display_name: "playbook-wright（旧调用名兼容）"
+  short_description: "兼容旧名称，读取主 playbook-wright Skill 完成演示创作和维护"
+  default_prompt: "使用 $playbook-playwright，先读取同级 playbook-wright 主 Skill，按当前契约完成我的演示需求。"

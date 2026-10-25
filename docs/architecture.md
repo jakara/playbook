@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-24。客户端 v0.6.3，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.9.2。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+日期：2026-10-25。客户端 v0.7.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.10.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
 
 ## 进程与职责
 
@@ -170,7 +170,7 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 ## 内置 Skill 安装
 
-公开基础引导来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`；完整专业 Skill 保存在本地忽略目录 `.private/skills/`，不进入公开 Git、应用或 Release。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
+完整创作、维护、呈现调整与 TC 转换 Skill 来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`；它们随公开仓库、应用和 Skill 压缩包一起按 MIT 许可交付。`.private/` 仅为不发布的本地备份。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
 
 | 框架 | 个人目标 | 项目目标 |
 |---|---|---|
@@ -227,7 +227,7 @@ Book/Section/脚本详情经受限 IPC 请求导出。主进程先打开系统�
 
 重启将未结束记录标为未知并保留成功责任和原错。用户点击恢复后核对 lifecycleVersion、应用版本、规范工作区路径/标识/源码 token、Profile 文件、脚本顺序、run/scope/flow 身份和冻结 flow.mjs 的 SHA-256；运行器再核对 Profile.recovery.version。原 worker 仍存活、代码不匹配、旧 Profile 无声明时要求人工核对。恢复只调用 Profile 幂等 recover，不调用 prepare 或业务步骤，不扫描猜测资源，不改变 retain/purge 策略。
 
-已确认成功的责任不会再次恢复；业务删除完成而回执未保存的强杀窗口仍可能重复调用同一 scopeId/cleanupId，业务须幂等。公开接口见 [SDK 类型](../src/index.ts)；专业 Skill 的生命周期指引通过市场另行分发。
+已确认成功的责任不会再次恢复；业务删除完成而回执未保存的强杀窗口仍可能重复调用同一 scopeId/cleanupId，业务须幂等。公开接口见 [SDK 类型](../src/index.ts)；完整生命周期指引见 [随包 Skill](../skills/playbook-wright/references/lifecycle.md)。
 
 ## 内置浏览器与手动交接
 

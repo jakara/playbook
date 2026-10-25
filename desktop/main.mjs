@@ -30,7 +30,7 @@ const builtinKeys = new Map([[tutorial, 'tutorial'], [starter, 'starter']]);
 const builtinKey = directory => builtinKeys.get(directory);
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-wright');
-const skillVersion = '0.10.0';
+const skillVersion = '0.10.1';
 const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshTask = null;

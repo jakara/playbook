@@ -44,6 +44,23 @@ Playbook 是面向软件演示、客户培训和流程讲解的桌面播放器�
 
 业务服务、登录和数据准备由项目自己的 Profile 提供。先在适合演示的环境验证，再用于客户场景。内置浏览器无需另装 Chrome；外部浏览器模式需要本机 Google Chrome。
 
+需要突出宽段落或多行正文时，可在单步启用 v0.7.1 的文字聚光：
+
+```ts
+{
+  id: 'read-result', title: '阅读结果', explain: '阅读真实提示。',
+  target: ({ page }) => page.getByText('生成服务尚未配置，可继续手工编写；已有内容已保留。', { exact: true }),
+  presentation: { spotlight: 'text', side: 'bottom', holdMs: 6500, afterMs: 6000 },
+  run: async () => {},
+  verify: async ({ page }) => {
+    if (!(await page.getByText('生成服务尚未配置，可继续手工编写；已有内容已保留。', { exact: true }).isVisible()))
+      throw new Error('提示未出现');
+  },
+}
+```
+
+`text` 只改变呈现几何；可见文字按 `Range` 逐行突出，滚动和重排后更新，弹窗尝试避让当前文字。`target` 仍须是唯一 Locator，业务操作和断言不变。默认 `element` 维持原有光圈、图片和整页呈现；无目标步骤继续用中央说明。超出视口的段落只突出当前可见行，需在脚本中安排正常阅读滚动。
+
 ## 能做什么
 
 | 能力 | 使用方式 |

@@ -2,9 +2,9 @@
 
 发布目标为 **macOS Apple Silicon**。客户端版本来自 `package.json`，Skill 版本保存在 Skill 入口；清单和脚本的 `schemaVersion` 不随客户端 patch 自动改变。
 
-客户端与 SDK 由 **jakara** 采用 MIT 许可，具体范围见 [LICENSE](../LICENSE) 和 [LICENSE_SCOPE.md](../LICENSE_SCOPE.md)。公开 Skill 仅为 community-bootstrap 安装/接入引导；完整的专业创作、维护和 TC 工作流不适用公开 MIT 授权，不进入公开 Git、应用包或 Release。
+客户端、SDK、完整创作/维护/TC Skill、文档和图标由 **jakara** 按 MIT 许可发布，具体范围见 [LICENSE](../LICENSE) 和 [LICENSE_SCOPE.md](../LICENSE_SCOPE.md)。完整 Skill 在公开仓库、应用和 Release 中保持一致。
 
-专业 Skill 在维护者本机的 gitignored `.private/skills/` 保存，计划仅由 WorkBuddy 市场另行分发，目前尚未上架。不创建虚构购买链接，不把专业版加入公开教程或安装器。
+`skills/` 是完整 Skill 的发布来源；gitignored `.private/` 仅作维护者本地备份，不进入公开 Git、应用包或 Release。
 
 ## 版本与触发
 
@@ -29,7 +29,7 @@
 |---|---|
 | `Playbook-macos-arm64.dmg` | Apple Silicon 磁盘映像 |
 | `Playbook-macos-arm64.zip` | Apple Silicon 应用 ZIP，供安装器下载 |
-| `playbook-skills.tar.gz` | 两个 community-bootstrap 基础安装/接入入口及自包含 CLI，不含专业 Skill |
+| `playbook-skills.tar.gz` | 完整创作/维护/TC Skill、兼容入口及自包含 CLI |
 | `install.sh` | 经校验后执行的安装器 |
 | `SHA256SUMS` | 同一次发布的资产 SHA-256 清单 |
 
@@ -43,14 +43,14 @@
 
 `latest` 用于展示下载入口。自动安装先获取 GitHub API 的 `latest.tag_name`，随后固定 `/releases/download/<tag>/...` 下载安装器与清单；校验安装器后传 `PLAYBOOK_RELEASE_TAG=<tag>` 执行，后续下载仍固定到同一 tag。不要混用跨版本脚本、包和校验值，不使用 `curl | bash`。完整用户步骤见 [install.md](../install.md)。
 
-应用包与公开基础引导包来自同一次源码构建；所有公开资产只允许打包 `skills/` 中的基础版，不读取 `.private/skills/`。应用图标由 [品牌源文件](../assets/playbook-mark.svg) 生成，不使用默认 Electron 图标。
+应用包与 Skill 包来自同一次源码构建；从 `skills/` 打包完整内容，不读取 `.private/` 本地备份。应用图标由 [品牌源文件](../assets/playbook-mark.svg) 生成，不使用默认 Electron 图标。
 
 ## 发布检查与失败保护
 
 新版本先完成依赖安装、类型/样例/单元和桌面必要检查，再构建、生成分发资产与校验清单。上传前核对：
 
-- 应用版本、CPU 架构、启动入口和随包文件；基础引导主入口、兼容入口及 community-bootstrap 分发标识完整性。
-- `.private/skills/` 不被 Git 跟踪；应用、压缩包、源码上传清单和 Release 中不含专业参考资料、专业作者工作流或私有目录。不能仅靠 `.gitignore` 代替实际包内容核对。
+- 应用版本、CPU 架构、启动入口和随包文件；完整 Skill 主入口、参考资料及兼容入口完整性。
+- `.private/` 不被 Git 跟踪或打入发布包；应用和 Skill 压缩包中均包含 `skills/` 的完整参考资料。不能仅靠 `.gitignore` 代替实际包内容核对。
 - ZIP、DMG 和 Skill 压缩包可读取，`SHA256SUMS` 对应实际要上传的字节。
 - 文件名符合固定下载接口，安装器支持固定 tag 下载和校验。
 - 适用的隔离播放、停止/清理、安装与导出回归。场景和证据记入 [验证记录](verification.md)，不能把 CI 成功当作真实桌面或业务验收。
@@ -68,7 +68,7 @@
 
 “保留 tag”只保证源码仍可定位，不代表旧二进制仍可下载。
 
-已有公开 Git 历史不重写、不删除；本次 MIT 许可不对历史专业 Skill 内容重新授权，也不声称旧公开内容已被收回。当前提交的分发边界与历史内容的既有状态分开说明。
+已有公开 Git 历史和 tags 保留，不通过改写历史清理本地备份或替换已有 tag。当前完整 Skill 的公开许可统一见根目录 MIT License。
 
 ## 本地开发与复核
 

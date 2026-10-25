@@ -114,6 +114,7 @@ test('new presentation fields validate shape, ranges and audio path boundaries',
     ['nonfinite feather', value => { value.presentation = { spotlightFeather: NaN }; }],
     ['non-numeric feather', value => { value.presentation = { spotlightFeather: '24' }; }],
     ['step feather', value => { value.steps[0].presentation = { spotlightFeather: 24 }; }],
+    ['invalid text spotlight', value => { value.steps[0].presentation = { spotlight: 'glyphs' }; }],
     ['step redactions', value => { value.steps[0].redactions = [{ selector: '.secret' }]; }],
     ['non-list redactions', value => { value.redactions = {}; }],
     ['empty selector', value => { value.redactions = [{ selector: ' ' }]; }],
@@ -146,6 +147,7 @@ test('new presentation fields validate shape, ranges and audio path boundaries',
   valid.narration = { enabled: false, opening: false, rate: 80 };
   valid.redactions = [{ selector: '.logo' }, { selector: '.data', mode: 'blur', blurPx: 40, padding: 0 }];
   valid.steps[0].narration = {};
+  valid.steps[0].presentation = { spotlight: 'text' };
   assert.equal(definePlaybook(valid), valid);
   valid.steps[0].narration = false;
   assert.equal(definePlaybook(valid), valid);

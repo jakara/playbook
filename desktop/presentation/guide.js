@@ -3,7 +3,7 @@
   const root = document.createElement('div');
   root.id = 'ygd-root'; root.setAttribute('popover', 'manual');
   root.innerHTML = `
-    <svg id="ygd-shade" aria-hidden="true"><defs><radialGradient id="ygd-feather"><stop id="ygd-feather-inner" offset="77%" stop-color="black"/><stop offset="100%" stop-color="white"/></radialGradient><mask id="ygd-mask"><rect width="100%" height="100%" fill="white"/><circle id="ygd-hole" cx="-200" cy="-200" r="105" fill="url(#ygd-feather)"/></mask></defs><rect width="100%" height="100%" fill="#1c2535" fill-opacity=".56" mask="url(#ygd-mask)"/></svg>
+    <svg id="ygd-shade" aria-hidden="true"><defs><radialGradient id="ygd-feather"><stop id="ygd-feather-inner" offset="77%" stop-color="black"/><stop offset="100%" stop-color="white"/></radialGradient><filter id="ygd-text-soft"><feGaussianBlur stdDeviation="5"/></filter><mask id="ygd-mask"><rect width="100%" height="100%" fill="white"/><circle id="ygd-hole" cx="-200" cy="-200" r="105" fill="url(#ygd-feather)"/><g id="ygd-text-soft-holes" filter="url(#ygd-text-soft)"></g><g id="ygd-text-holes"></g></mask></defs><rect width="100%" height="100%" fill="#1c2535" fill-opacity=".56" mask="url(#ygd-mask)"/></svg>
     <div id="ygd-cursor" aria-hidden="true"><span class="ygd-halo"></span><svg viewBox="0 0 32 40"><path d="M3 2 L3 31 L11 23 L17 37 L23 34 L17 20 L29 20 Z" fill="white" stroke="#142139" stroke-width="2.4" stroke-linejoin="round"/></svg><span class="ygd-ripple"></span></div>
     <section id="ygd-card" aria-live="polite" hidden></section>
 `;
@@ -11,6 +11,7 @@
   const $ = selector => root.querySelector(selector);
   const cursor = $('#ygd-cursor'), hole = $('#ygd-hole'), card = $('#ygd-card');
   let position = { x: innerWidth * .7, y: innerHeight * .65 };
+  let textSession, cancelled = false;
   const driver = window.driver.js.driver({
     animate: true, duration: 280, overlayOpacity: 0,
     allowClose: false, allowKeyboardControl: false, showButtons: [],
@@ -30,7 +31,7 @@
   }
   function state(value) { root.dataset.phase = value.phase; }
   function center({ eyebrow, title, description, phase = 'ready' }) {
-    driver.destroy(); bringForward();
+    clearText(); driver.destroy(); bringForward();
     card.replaceChildren(); card.hidden = false; cursor.hidden = true;
     hole.setAttribute('r', 0);
     const tag = document.createElement('div'); tag.className = 'ygd-eyebrow'; tag.textContent = eyebrow;
@@ -47,7 +48,108 @@
     hole.setAttribute('fill', feather ? 'url(#ygd-feather)' : 'black');
     root.querySelector('#ygd-shade > rect').setAttribute('fill-opacity', value.overlayOpacity ?? .56);
   }
+  function clearText() {
+    if (textSession) {
+      textSession.controller.abort(); textSession.observer.disconnect(); textSession.resize.disconnect();
+      if (textSession.frame) cancelAnimationFrame(textSession.frame);
+      textSession.popover.remove(); textSession = null;
+    }
+    $('#ygd-text-holes').replaceChildren(); $('#ygd-text-soft-holes').replaceChildren();
+  }
+  const svg = name => document.createElementNS('http://www.w3.org/2000/svg', name);
+  function visibleTextLines(element) {
+    if (!element.isConnected || !element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return [];
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const fragments = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!node.textContent.trim() || !node.parentElement?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
+      const range = document.createRange(); range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) {
+        const left = Math.max(0, rect.left), top = Math.max(0, rect.top);
+        const right = Math.min(innerWidth, rect.right), bottom = Math.min(innerHeight, rect.bottom);
+        if (right > left && bottom > top) fragments.push({ left, top, right, bottom });
+      }
+      range.detach();
+    }
+    fragments.sort((a, b) => a.top - b.top || a.left - b.left);
+    const lines = [];
+    for (const item of fragments) {
+      const line = lines.find(value => Math.abs(value.top - item.top) < 4 && Math.abs(value.bottom - item.bottom) < 5);
+      if (line) { line.left = Math.min(line.left, item.left); line.right = Math.max(line.right, item.right); line.top = Math.min(line.top, item.top); line.bottom = Math.max(line.bottom, item.bottom); }
+      else lines.push({ ...item });
+    }
+    return lines;
+  }
+  function placeTextPopover(popover, lines, preferred) {
+    const bounds = lines.reduce((a, b) => ({ left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) }));
+    const width = Math.min(360, innerWidth - 24), height = popover.getBoundingClientRect().height;
+    const clamp = (value, limit) => Math.max(12, Math.min(value, limit - 12));
+    const choices = {
+      bottom: { left: clamp(bounds.left, innerWidth - width), top: bounds.bottom + 18 },
+      top: { left: clamp(bounds.left, innerWidth - width), top: bounds.top - height - 18 },
+      right: { left: bounds.right + 18, top: clamp(bounds.top, innerHeight - height) },
+      left: { left: bounds.left - width - 18, top: clamp(bounds.top, innerHeight - height) },
+    };
+    const order = [preferred, 'bottom', 'top', 'right', 'left'].filter((value, index, all) => all.indexOf(value) === index);
+    const score = side => {
+      const point = choices[side], endX = point.left + width, endY = point.top + height;
+      const outside = Math.max(0, -point.left) + Math.max(0, endX - innerWidth) + Math.max(0, -point.top) + Math.max(0, endY - innerHeight);
+      const overlap = lines.reduce((sum, line) => sum + Math.max(0, Math.min(endX, line.right) - Math.max(point.left, line.left)) * Math.max(0, Math.min(endY, line.bottom) - Math.max(point.top, line.top)), 0);
+      return outside * 10000 + overlap;
+    };
+    order.sort((a, b) => score(a) - score(b));
+    const point = choices[order[0]];
+    popover.style.width = `${width}px`;
+    popover.style.left = `${clamp(point.left, innerWidth - width)}px`;
+    popover.style.top = `${clamp(point.top, innerHeight - height)}px`;
+  }
+  function textHighlight(element, step) {
+    clearText(); driver.destroy(); bringForward(element);
+    card.hidden = true; cursor.hidden = true; hole.setAttribute('r', 0);
+    const popover = document.createElement('section'); popover.className = 'driver-popover ygd-popover ygd-text-popover';
+    const badge = document.createElement('span'); badge.className = 'ygd-step-tag'; badge.textContent = `步骤 ${String(step.index).padStart(2, '0')} / ${step.total} · ${step.actionLabel || '查看'}`;
+    const title = document.createElement('div'); title.className = 'driver-popover-title'; title.textContent = step.title;
+    const description = document.createElement('div'); description.className = 'driver-popover-description'; description.textContent = step.description;
+    popover.append(badge, title, description); root.append(popover);
+    const controller = new AbortController();
+    const session = { element, popover, controller, frame: 0, lines: [], observer: null, resize: null };
+    const refresh = () => {
+      session.frame = 0;
+      if (textSession !== session || cancelled) return;
+      session.lines = visibleTextLines(element);
+      $('#ygd-text-holes').replaceChildren(); $('#ygd-text-soft-holes').replaceChildren();
+      if (!session.lines.length) { popover.hidden = true; return; }
+      popover.hidden = false;
+      for (const line of session.lines) {
+        const rect = svg('rect'); const soft = svg('rect');
+        for (const shape of [rect, soft]) {
+          shape.setAttribute('x', Math.max(0, line.left - 6)); shape.setAttribute('y', Math.max(0, line.top - 5));
+          shape.setAttribute('width', Math.min(innerWidth, line.right + 6) - Math.max(0, line.left - 6));
+          shape.setAttribute('height', Math.min(innerHeight, line.bottom + 5) - Math.max(0, line.top - 5));
+          shape.setAttribute('rx', 7); shape.setAttribute('fill', 'black');
+        }
+        $('#ygd-text-holes').append(rect); $('#ygd-text-soft-holes').append(soft);
+      }
+      placeTextPopover(popover, session.lines, step.side || 'bottom');
+    };
+    const schedule = () => { if (!session.frame && textSession === session && !cancelled) session.frame = requestAnimationFrame(refresh); };
+    session.observer = new MutationObserver(records => { if (records.some(record => !root.contains(record.target))) schedule(); });
+    session.resize = new ResizeObserver(schedule);
+    textSession = session;
+    refresh();
+    if (!session.lines.length) { clearText(); throw new Error('文字聚光目标没有可见文字'); }
+    session.observer.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+    session.resize.observe(element);
+    addEventListener('scroll', schedule, { capture: true, passive: true, signal: controller.signal });
+    addEventListener('resize', schedule, { passive: true, signal: controller.signal });
+    visualViewport?.addEventListener('resize', schedule, { passive: true, signal: controller.signal });
+    visualViewport?.addEventListener('scroll', schedule, { passive: true, signal: controller.signal });
+    document.fonts?.addEventListener('loadingdone', schedule, { signal: controller.signal });
+  }
   function highlight(element, step) {
+    if (cancelled) return;
+    if (step.spotlight === 'text') { textHighlight(element, step); state({ phase: 'playing' }); return; }
+    clearText();
     card.hidden = true; cursor.hidden = false; hole.setAttribute('r', radius); bringForward(element);
     driver.highlight({ element, popover: {
       title: escape(step.title), description: escape(step.description),
@@ -62,12 +164,13 @@
     }});
     state({ phase: 'playing', title: step.title, count: `${String(step.index).padStart(2, '0')} / ${step.total}`, progress: (step.index - 1) / step.total * 100 });
   }
-  function detach() { driver.destroy(); card.hidden = true; cursor.hidden = false; bringForward(); }
+  function detach() { clearText(); driver.destroy(); card.hidden = true; cursor.hidden = false; hole.setAttribute('r', 0); bringForward(); }
   function clickEffect() {
     cursor.classList.remove('ygd-click'); void cursor.offsetWidth; cursor.classList.add('ygd-click');
   }
-  function interactive() { driver.destroy(); card.hidden = true; cursor.hidden = true; root.dataset.phase = 'waiting'; root.style.setProperty('display', 'none', 'important'); if (root.matches(':popover-open')) root.hidePopover(); }
-  window.playbookGuide = { interactive, configure, center, highlight, state, place: ({ x, y }) => place(x, y), detach, clickEffect, position: () => position, bringForward,
-    inspect: () => ({ phase: root.dataset.phase, x: position.x, y: position.y, apertureX: Number(hole.getAttribute('cx')), apertureY: Number(hole.getAttribute('cy')), spotlightFeather: feather, cardVisible: !card.hidden, popoverVisible: !!document.querySelector('.ygd-popover') }) };
+  function interactive() { clearText(); driver.destroy(); card.hidden = true; cursor.hidden = true; root.dataset.phase = 'waiting'; root.style.setProperty('display', 'none', 'important'); if (root.matches(':popover-open')) root.hidePopover(); }
+  function cancel() { cancelled = true; detach(); cursor.hidden = true; root.style.setProperty('display', 'none', 'important'); if (root.matches(':popover-open')) root.hidePopover(); }
+  window.playbookGuide = { interactive, configure, center, highlight, state, place: ({ x, y }) => place(x, y), detach, cancel, clickEffect, position: () => position, bringForward,
+    inspect: () => ({ phase: root.dataset.phase, x: position.x, y: position.y, apertureX: Number(hole.getAttribute('cx')), apertureY: Number(hole.getAttribute('cy')), spotlightFeather: feather, cardVisible: !card.hidden, popoverVisible: !!document.querySelector('.ygd-popover'), textLines: textSession?.lines || [], textVisible: !!textSession?.lines.length, textPopover: textSession?.popover.getBoundingClientRect().toJSON() || null }) };
   place(position.x, position.y);
 })();

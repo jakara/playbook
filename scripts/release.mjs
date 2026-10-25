@@ -94,7 +94,7 @@ export async function publishRelease({ root = projectRoot, repository = process.
   const tagCommit = await github.tagCommit(version.tag);
   if (tagCommit && tagCommit !== targetCommit) throw new Error('Immutable release tag already points to a different commit; increase the package version');
   if (existing && existing.target_commitish !== targetCommit) throw new Error('Existing draft belongs to another commit; increase the package version');
-  const body = `macOS Apple Silicon · Playbook ${version.version}\n\nDownload the DMG or ZIP. This build is unsigned. Verify downloads with SHA256SUMS.\n\nThe public bootstrap Skill and installer are provided separately; the commercial authoring Skill is not included. See the [installation guide](https://github.com/${repository}/blob/${version.tag}/README.md).`;
+  const body = `macOS Apple Silicon · Playbook ${version.version}\n\nDownload the DMG or ZIP. This build is unsigned. Verify downloads with SHA256SUMS.\n\nThe client, SDK and complete authoring Skill are open source under MIT. The Skill bundle includes the authoring, maintenance, lifecycle and Playwright conversion guides, with a separate installer. See the [installation guide](https://github.com/${repository}/blob/${version.tag}/README.md).`;
   const draft = existing || await github.createDraft({ tag_name: version.tag, name: `Playbook ${version.version}`, target_commitish: targetCommit,
     draft: true, prerelease: false, make_latest: 'false', body });
   if (!draft?.draft || draft.tag_name !== version.tag || !Number.isSafeInteger(draft.id)) throw new Error('GitHub did not return the expected draft release');

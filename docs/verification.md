@@ -1,3 +1,14 @@
+# README 与完整 Skill 开源 · v0.7.1 / Skill 0.10.1
+
+日期：2026-10-25。按新的分发决定，客户端、SDK、完整 Skill、文档与图标统一 MIT，亦覆盖作者拥有版权的历史完整 Skill；旧版本记录保留，当前许可范围见 `LICENSE_SCOPE.md`。
+
+- README 改为用途、安装、播放、项目文件和开发说明，保留 slogan，删除商业分层、图标寓意和重复宣传。按 no-ai-slop 的 `eval.md` 逐项复核；主 Agent 直接完成编辑与复核。
+- 完整 Skill 的创作、维护、呈现、生命周期、PPTX 与 TC 双向转换资料恢复至公开 `skills/`，共18个源文件、11份参考资料。`.private/` 只保留本地历史快照，不参与打包。
+- 全量 `npm run check`：196项检查，195通过、1平台跳过、0失败；3个示例 TC 通过，original/shared/standalone 三种入口均拒绝刻意修改的业务预期。日志 `artifacts/release-0.7.1/local-check.log`。两个 Skill validator 通过，README 与 Skill 的52个本地引用均存在。
+- 隔离安装/发布测试50/50通过，覆盖0.7.0基础包与旧完整 Skill 的备份升级、本地修改/软链接保护、完整参考资料打包，以及本地快照和历史产物排除。
+- 实际0.7.1打包客户端中，点击指定项目、选择临时目录并安装两个入口；核对18个文件摘要、11份参考资料和0.10.1版本。证据 `artifacts/release-0.7.1/desktop-verification-final.json`。文件选择器返回值由fixture提供，未声称实体选择器或当前Codex会话加载已验证；未修改用户真实框架配置或业务数据。
+- 新 DMG/ZIP 已构建。远端CI和发布后下载结果以实际Actions/Release及本地独立证据为准，本节不预写远端成功。本轮未新增付费模型调用。
+
 # 自动构建与开源分发 · v0.7.0 / 基础 Skill 0.10.0
 
 日期：2026-10-24。本节记录本地验证；GitHub 构建/发布结果以对应 Actions 和 Release 为准。

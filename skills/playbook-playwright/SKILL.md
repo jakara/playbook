@@ -7,4 +7,4 @@ metadata:
 
 # Playbook 基础引导的旧名称
 
-当前随包 Skill 版本 **0.10.0**。读取同级 [playbook-wright](../playbook-wright/SKILL.md) 后执行相同的基础安装与接入指引。主入口缺失时报告安装不完整。此入口不包含市场专业 Skill，不得声称能够取得或已加载专业作者流程。
+当前随包 Skill 版本 **0.10.1**。读取同级 [playbook-wright](../playbook-wright/SKILL.md) 后执行相同的基础安装与接入指引。主入口缺失时报告安装不完整。此入口不包含市场专业 Skill，不得声称能够取得或已加载专业作者流程。

@@ -181,11 +181,11 @@ test('a newer manual pause wins while continue is awaiting browser activation', 
 });
 
 test('stopping during manual browser activation never resumes a stale handoff', async () => {
-  let focused, continuations = 0;
+  let focused, continuations = 0, cancelled = 0;
   const focusPending = new Promise(resolve => { focused = resolve; });
   const gate = { busy: false, resume: () => { continuations++; } };
   const context = vm.createContext({ manualGate: gate, current: { interaction: {} }, paused: false, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
-    activeScope: null, foreground: () => focusPending, state: async () => {}, stopVoice: async () => {}, change: () => {}, process: {}, executionAbort: null, narrationAbort: null,
+    activeScope: null, foreground: () => focusPending, state: async () => {}, stopVoice: async () => {}, ui: async method => { if (method === 'cancel') cancelled++; }, change: () => {}, process: {}, executionAbort: null, narrationAbort: null,
   });
   vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);
   const resume = vm.runInContext("commandHandler({command:'resume'})", context);
@@ -193,6 +193,7 @@ test('stopping during manual browser activation never resumes a stale handoff', 
   focused(); await resume;
   assert.equal(context.stopped, true);
   assert.equal(continuations, 0);
+  assert.equal(cancelled, 1);
 });
 
 test('native control preserves user position and collapsed state across mouse activity and idle hiding', async () => {

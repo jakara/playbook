@@ -29,7 +29,32 @@ async function fixture(t) {
     target: path.join(project, '.agents/skills/playbook-wright/SKILL.md') };
 }
 
-test('CLI installs both public entries, is idempotent and rejects a relative project', async t => {
+async function assertFullSkill(f) {
+  const referenceNames = await fs.readdir(path.join(root, 'skills/playbook-wright/references'));
+  for (const required of ['authoring.md', 'contract.md', 'interaction.md', 'lifecycle.md', 'tc-to-playbook.md', 'playbook-to-tc.md']) assert.ok(referenceNames.includes(required), required);
+  for (const name of referenceNames) {
+    assert.equal(await fs.readFile(path.join(path.dirname(f.target), 'references', name), 'utf8'), await fs.readFile(path.join(root, 'skills/playbook-wright/references', name), 'utf8'));
+  }
+  assert.equal(await fs.readFile(path.join(f.project, '.agents/skills/playbook-playwright/SKILL.md'), 'utf8'), await fs.readFile(path.join(root, 'skills/playbook-playwright/SKILL.md'), 'utf8'));
+}
+async function useLegacySkill(f, { version, bootstrap }) {
+  await fs.rm(path.join(f.directory, 'skills'), { recursive: true });
+  for (const name of ['playbook-wright', 'playbook-playwright']) {
+    const directory = path.join(f.directory, 'skills', name); await fs.mkdir(directory, { recursive: true });
+    const marker = bootstrap ? 'edition: community-bootstrap\n' : '';
+    await fs.writeFile(path.join(directory, 'SKILL.md'), `---\nname: ${name}\n${marker}---\nSkill 版本 **${version}**\nLegacy ${bootstrap ? 'bootstrap' : 'full'} fixture\n`);
+    if (!bootstrap && name === 'playbook-wright') {
+      await fs.mkdir(path.join(directory, 'references'));
+      await fs.writeFile(path.join(directory, 'references/legacy-guide.md'), 'Original full Skill guide\n');
+    }
+  }
+}
+async function restoreFullSource(f) {
+  await fs.rm(path.join(f.directory, 'skills'), { recursive: true });
+  await fs.cp(path.join(root, 'skills'), path.join(f.directory, 'skills'), { recursive: true });
+}
+
+test('CLI installs the full Skill and compatibility entry, is idempotent and rejects a relative project', async t => {
   const f = await fixture(t);
   const installed = await run(process.execPath, [cli, ...f.args], f.env);
   assert.equal(installed.code, 0, installed.stderr);
@@ -38,43 +63,67 @@ test('CLI installs both public entries, is idempotent and rejects a relative pro
   const before = await fs.readFile(metadata, 'utf8');
   assert.equal((await run(process.execPath, [cli, ...f.args], f.env)).code, 0);
   assert.equal(await fs.readFile(metadata, 'utf8'), before);
-  assert.match(await fs.readFile(path.join(f.project, '.agents/skills/playbook-playwright/SKILL.md'), 'utf8'), /community-bootstrap/);
+  await assertFullSkill(f);
   const invalid = await run(process.execPath, [cli, ...f.args.slice(0, -1), 'relative'], f.env);
   assert.equal(invalid.code, 1);
   assert.equal(JSON.parse(invalid.stderr).code, 'INVALID_PATH');
 });
 
-test('public bootstrap refuses automatic downgrade of a managed full Skill; explicit replacement backs up', async t => {
-  const f = await fixture(t);
-  for (const name of ['playbook-wright', 'playbook-playwright']) {
-    const filename = path.join(f.directory, 'skills', name, 'SKILL.md');
-    await fs.writeFile(filename, (await fs.readFile(filename, 'utf8')).replace('edition: community-bootstrap', 'edition: professional'));
-  }
-  assert.equal((await run(process.execPath, [cli, ...f.args], f.env)).code, 0);
-  const professional = await fs.readFile(f.target, 'utf8');
-  await fs.cp(path.join(root, 'skills'), path.join(f.directory, 'skills'), { recursive: true });
-  const refused = await run(process.execPath, [cli, ...f.args], f.env);
-  assert.equal(refused.code, 1);
-  assert.equal(JSON.parse(refused.stderr).code, 'REPLACE_REQUIRED');
-  assert.equal(await fs.readFile(f.target, 'utf8'), professional);
-  const replaced = await run(process.execPath, [cli, ...f.args, '--replace'], f.env);
-  assert.equal(replaced.code, 0, replaced.stderr);
-  const receipt = JSON.parse(replaced.stdout);
-  assert.equal(receipt.backups.length, 2);
-  assert.equal(await fs.readFile(path.join(receipt.backups[0].path, 'SKILL.md'), 'utf8'), professional);
+test('0.7.0 bootstrap and older full Skill both update to the complete managed Skill with verified backups', async t => {
+  for (const previous of [{ version: '0.10.0', bootstrap: true }, { version: '0.8.0', bootstrap: false }]) await t.test(previous.bootstrap ? '0.7.0 bootstrap package' : 'older full Skill', async t => {
+    const f = await fixture(t); await useLegacySkill(f, previous);
+    const first = await run(process.execPath, [cli, ...f.args], f.env);
+    assert.equal(first.code, 0, first.stderr);
+    const original = await fs.readFile(f.target, 'utf8');
+    await restoreFullSource(f);
+    const preview = await run(process.execPath, [cli, ...f.args, '--preview'], f.env);
+    assert.equal(preview.code, 0, preview.stderr);
+    assert.equal(JSON.parse(preview.stdout).status, 'update');
+    const updated = await run(process.execPath, [cli, ...f.args], f.env);
+    assert.equal(updated.code, 0, updated.stderr);
+    const receipt = JSON.parse(updated.stdout);
+    assert.equal(receipt.backups.length, 2);
+    const backup = receipt.backups.find(item => item.name === 'playbook-wright').path;
+    assert.equal(await fs.readFile(path.join(backup, 'SKILL.md'), 'utf8'), original);
+    assert.equal(JSON.parse(await fs.readFile(path.join(backup, '.playbook-install.json'), 'utf8')).version, previous.version);
+    if (!previous.bootstrap) assert.equal(await fs.readFile(path.join(backup, 'references/legacy-guide.md'), 'utf8'), 'Original full Skill guide\n');
+    await assertFullSkill(f);
+    const after = await run(process.execPath, [cli, ...f.args, '--preview'], f.env);
+    assert.equal(after.code, 0, after.stderr); assert.equal(JSON.parse(after.stdout).status, 'installed');
+  });
 });
 
 test('CLI protects local modifications and symlinks', async t => {
   const f = await fixture(t);
   assert.equal((await run(process.execPath, [cli, ...f.args], f.env)).code, 0);
   await fs.appendFile(f.target, '\nUser note\n');
-  assert.equal((await run(process.execPath, [cli, ...f.args], f.env)).code, 1);
+  const modified = await run(process.execPath, [cli, ...f.args], f.env);
+  assert.equal(modified.code, 1);
+  assert.equal(JSON.parse(modified.stderr).code, 'REPLACE_REQUIRED');
   const targetDir = path.dirname(f.target), moved = path.join(f.directory, 'linked-original');
   await fs.rename(targetDir, moved); await fs.symlink(moved, targetDir);
   const rejected = await run(process.execPath, [cli, ...f.args, '--replace'], f.env);
   assert.equal(rejected.code, 1);
   assert.equal(JSON.parse(rejected.stderr).code, 'SYMLINK');
   assert.match(await fs.readFile(f.target, 'utf8'), /User note/);
+});
+
+test('modified legacy bootstrap is preserved unless replacement is explicit, then fully backed up', async t => {
+  const f = await fixture(t); await useLegacySkill(f, { version: '0.10.0', bootstrap: true });
+  assert.equal((await run(process.execPath, [cli, ...f.args], f.env)).code, 0);
+  await fs.appendFile(f.target, '\nLocal bootstrap change\n');
+  await fs.writeFile(path.join(path.dirname(f.target), 'local-note.txt'), 'Keep this additional file\n');
+  const before = await fs.readFile(f.target, 'utf8'); await restoreFullSource(f);
+  const blocked = await run(process.execPath, [cli, ...f.args], f.env);
+  assert.equal(blocked.code, 1); assert.equal(JSON.parse(blocked.stderr).code, 'REPLACE_REQUIRED');
+  assert.equal(await fs.readFile(f.target, 'utf8'), before);
+  const installed = await run(process.execPath, [cli, ...f.args, '--replace'], f.env);
+  assert.equal(installed.code, 0, installed.stderr);
+  const backup = JSON.parse(installed.stdout).backups.find(item => item.name === 'playbook-wright').path;
+  assert.equal(await fs.readFile(path.join(backup, 'SKILL.md'), 'utf8'), before);
+  assert.equal(await fs.readFile(path.join(backup, 'local-note.txt'), 'utf8'), 'Keep this additional file\n');
+  assert.equal(await fs.readFile(path.join(path.dirname(f.target), 'local-note.txt'), 'utf8'), 'Keep this additional file\n');
+  await assertFullSkill(f);
 });
 
 async function fakeApp(directory, version = '0.6.3') {
@@ -114,7 +163,7 @@ test('shell detection never downloads; compatible old app runs downloaded standa
   await assert.rejects(fs.stat(path.join(f.assets, 'requests')), { code: 'ENOENT' });
   const installed = await run('/bin/bash', [f.script, '--install', '--app-dir', appDir, '--framework', 'codex', '--scope', 'project', '--project-root', f.project], f.env);
   assert.equal(installed.code, 0, installed.stderr);
-  assert.match(await fs.readFile(f.target, 'utf8'), /community-bootstrap/);
+  await assertFullSkill(f);
   assert.doesNotMatch(await fs.readFile(path.join(f.assets, 'requests'), 'utf8'), /latest|\.zip/);
 });
 

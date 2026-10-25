@@ -103,7 +103,13 @@ async function inject() {
   await page.addScriptTag({ content: await readFile(from('desktop/presentation/narration.js'), 'utf8') });
   await ui('place', position);
 }
-async function moveTo(target, duration) {
+async function moveTo(target, duration, spotlight = 'element') {
+  if (spotlight === 'text') {
+    await wait(duration);
+    const visible = await page.evaluate(() => window.playbookGuide?.inspect().textVisible);
+    if (!visible) throw new Error('文字聚光目标没有可见文字');
+    return;
+  }
   const box = await target.boundingBox();
   if (!box) throw new Error('演示目标已不可见');
   const start = position, end = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -248,23 +254,27 @@ async function run(input) {
           await wait(Math.min(1800, settings.openingMs));
         }
         const target = step.target?.(prepared.context);
+        if (!target && step.presentation?.spotlight === 'text') throw new Error('文字聚光需要唯一的 Locator 目标');
         const source = await voiceSource(flow, step.narration, step.explain);
         let spoken;
         if (target) {
           if (await target.count() !== 1) throw new Error('目标控件不唯一');
           await target.waitFor({ state: 'visible' });
           await target.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
-          await target.evaluate((element, details) => window.playbookGuide.highlight(element, details), { title: step.title, description: step.explain, side: step.presentation?.side, actionLabel: step.interaction ? '手动操作' : '查看', index: completed + 1, total });
+          await target.evaluate((element, details) => window.playbookGuide.highlight(element, details), { title: step.title, description: step.explain, side: step.presentation?.side, spotlight: step.presentation?.spotlight || 'element', actionLabel: step.interaction ? '手动操作' : '查看', index: completed + 1, total });
+          await checkpoint();
           if (config.exportDir) {
-            const box = await target.boundingBox();
-            if (!box) throw new Error('导出目标已不可见');
-            await ui('place', { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+            if (step.presentation?.spotlight !== 'text') {
+              const box = await target.boundingBox();
+              if (!box) throw new Error('导出目标已不可见');
+              await ui('place', { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+            }
             try { await slide('step', step.title, transcript(step.narration, step.explain), (step.presentation?.holdMs ?? settings.defaultHoldMs) + settings.cursorMoveMs + 250, source); }
             finally { await ui('place', position); }
           }
           spoken = startVoice(source);
           await wait(step.presentation?.holdMs ?? settings.defaultHoldMs);
-          await moveTo(target, settings.cursorMoveMs);
+          await moveTo(target, settings.cursorMoveMs, step.presentation?.spotlight);
           await capture(`step-${completed + 1}`);
           if (!step.interaction) { await ui('clickEffect'); await wait(250); }
         } else {
@@ -292,6 +302,7 @@ async function run(input) {
       } catch (error) { segmentError = error; if (!(error instanceof Stopped) && error.name !== 'AbortError') { executionError = safeError(error, config.parameters); await request('execution-error', { error: executionError }); } throw error; }
       finally {
         inOperation = false;
+        await ui('cancel').catch(() => {});
         await stopVoice();
         const receipt = await activeScope.release(stopped || closing ? 'stopped' : segmentError ? 'failed' : 'completed');
         if (!settledCleanup(receipt.status) && !segmentError) { const error = new Error('环境释放未完成，请核对本轮资源'); error.cleanupFailure = true; throw error; }
@@ -373,7 +384,7 @@ async function commandHandler({ command, config: input, busy: inputBusy }) {
   }
   if (command === 'stop' || command === 'close') {
     pauseVersion++; stopped = true; paused = false; closing ||= command === 'close';
-    executionAbort?.abort(); narrationAbort?.abort(); await stopVoice();
+    executionAbort?.abort(); narrationAbort?.abort(); await ui('cancel').catch(() => {}); await stopVoice();
     if (running) await state();
     else if (closing) { await browser?.close().catch(() => {}); process.exit(0); }
   }

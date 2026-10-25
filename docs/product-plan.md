@@ -1,6 +1,6 @@
 # Playbook 产品方案
 
-日期：2026-10-24。本文为 v0.6.3 功能与边界说明，随包 Skill 为 0.9.2；具体通过项、版本和证据见 [verification.md](verification.md)，文档中的功能描述不替代运行验收。
+日期：2026-10-25。本文为 v0.7.1 功能与边界说明，随包 Skill 为 0.10.1；具体通过项、版本和证据见 [verification.md](verification.md)，文档中的功能描述不替代运行验收。
 
 ## 产品定位
 
@@ -49,7 +49,7 @@ Book 和 Section 都可播放全部：Book 的“播放全部”和 Section 的�
 4. 更新先备份；修改/冲突须勾选“先备份再替换已有内容”；软链接不安装。
 5. 在自己的智能体中确认可用。首版校验文件安装，不探测智能体加载。
 
-Skill 随应用交付，无需另行下载。每次只写选定目标，不自动改全局规则、hooks、模型设置或凭据。备份附恢复材料，首版无一键恢复界面。
+客户端、SDK 和完整创作/维护/TC Skill 统一按 MIT 许可发布。Skill 随公开仓库、应用和 Skill 压缩包交付，无需另行取得创作指引；`.private/` 仅为不发布的本地备份。每次只写选定目标，不自动改全局规则、hooks、模型设置或凭据。备份附恢复材料，首版无一键恢复界面。
 
 ### 交给自己的智能体创作
 
@@ -186,4 +186,4 @@ Book、Section 和脚本详情提供导出按钮。导出重新执行真实流�
 
 脚本可选声明 `playback: { browser: 'embedded' }`，步骤可选声明 `interaction: { mode: 'manual', timeoutMs: 10000, onTimeout: 'continue' }`。旁白完成后隐藏提示与蒙层，默认十秒后继续，用户可提前继续或暂停计时；真实输入重新计时，选择文件夹和安装期间冻结。设为 0 可等待用户明确继续，超时策略也可设为 fail。交接结果与实际安装结果分别记录，业务成功仍由 verify 判断。
 
-这些字段保持 schemaVersion 1，旧 Profile 与 prepare/release 语义不变。TC 继续执行自动 run/verify，不等待人类或伪造手动结果。内置模式拦截新弹窗；依赖多窗口、多个独立 BrowserContext、扩展或特定 Chrome 参数的流程使用独立模式。公开字段以 [SDK 类型](../src/index.ts) 为准；完整专业 Skill 指引仅由市场另行分发。
+这些字段保持 schemaVersion 1，旧 Profile 与 prepare/release 语义不变。TC 继续执行自动 run/verify，不等待人类或伪造手动结果。内置模式拦截新弹窗；依赖多窗口、多个独立 BrowserContext、扩展或特定 Chrome 参数的流程使用独立模式。公开字段以 [SDK 类型](../src/index.ts) 为准；完整创作、维护和转换指引见 [随包 Skill](../skills/playbook-wright/SKILL.md)。
