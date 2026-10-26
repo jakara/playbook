@@ -30,6 +30,12 @@ async function fixture(t) {
 }
 
 async function assertFullSkill(f) {
+  const guide = await fs.readFile(f.target, 'utf8');
+  assert.equal(guide, await fs.readFile(path.join(root, 'skills/playbook-wright/SKILL.md'), 'utf8'));
+  assert.doesNotMatch(guide, /edition:\s*community-bootstrap/, 'the installed entry must load the complete authoring Skill');
+  for (const reference of ['authoring.md', 'maintenance.md', 'tc-to-playbook.md', 'playbook-to-tc.md']) {
+    assert.ok(guide.includes(`references/${reference}`), `the entry must route to ${reference}`);
+  }
   const referenceNames = await fs.readdir(path.join(root, 'skills/playbook-wright/references'));
   for (const required of ['authoring.md', 'contract.md', 'interaction.md', 'lifecycle.md', 'tc-to-playbook.md', 'playbook-to-tc.md']) assert.ok(referenceNames.includes(required), required);
   for (const name of referenceNames) {
