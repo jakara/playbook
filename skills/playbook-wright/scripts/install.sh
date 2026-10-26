@@ -38,9 +38,8 @@ TAG="${PLAYBOOK_RELEASE_TAG:-}"
 DSH_TARGET_PROFILE=''
 DSH_TARGET_DIR=''
 DSH_CLI=''
-DSH_PLUGIN_TAG='playbook-dsh-v0.11.0'
-DSH_PLUGIN_FILE='playbook-dsh-0.11.0.tgz'
-DSH_PLUGIN_SHA256='d95d360ec2020547011f72a2eadbc46c6ea2bf1a2cd3c56f46b542993b6027f4'
+DSH_PLUGIN_VERSION='0.11.1'
+DSH_PLUGIN_SPEC="playbook-dsh@$DSH_PLUGIN_VERSION"
 
 fail() { printf 'Playbook: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -150,32 +149,7 @@ verified_download() {
 }
 
 install_dsh_plugin() {
-  [ "$DSH_PLUGIN_SHA256" != 'STANDALONE_INSTALLER_ONLY' ] || fail '插件包内的 Skill 不执行插件自更新；请使用本版本 GitHub Release 的独立 install.sh。'
-  local plugin_base="https://github.com/$REPOSITORY/releases/download/$DSH_PLUGIN_TAG"
-  local expected actual package_dir package_path backup_dir filename workspace_file staged
-  download "$plugin_base/SHA256SUMS" "$TEMP_ROOT/dsh-SHA256SUMS" || fail '无法下载 DSH 插件校验清单。'
-  expected="$(/usr/bin/awk -v wanted="$DSH_PLUGIN_FILE" '$2 == wanted || $2 == "*" wanted {print $1}' "$TEMP_ROOT/dsh-SHA256SUMS")"
-  [ "$expected" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件发布校验值与安装器记录不一致。'
-  download "$plugin_base/$DSH_PLUGIN_FILE" "$TEMP_ROOT/$DSH_PLUGIN_FILE" || fail '无法下载 DSH 插件包。'
-  actual="$(/usr/bin/shasum -a 256 "$TEMP_ROOT/$DSH_PLUGIN_FILE" | /usr/bin/awk '{print $1}')"
-  [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件包 SHA-256 校验失败。'
-
-  package_dir="$DSH_DATA_HOME/packages/playbook-dsh"
-  /bin/mkdir -p "$package_dir"
-  package_path="$package_dir/$DSH_PLUGIN_FILE"
-  if [ -e "$package_path" ] || [ -L "$package_path" ]; then
-    [ -f "$package_path" ] && [ ! -L "$package_path" ] || fail 'DSH 插件包目标不是普通文件，已保留。'
-    actual="$(/usr/bin/shasum -a 256 "$package_path" | /usr/bin/awk '{print $1}')"
-    [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail '同版本 DSH 插件包内容不匹配，已保留原文件。'
-  else
-    staged="$(/usr/bin/mktemp "$package_dir/.playbook-dsh.XXXXXX")"
-    /bin/cp "$TEMP_ROOT/$DSH_PLUGIN_FILE" "$staged"
-    actual="$(/usr/bin/shasum -a 256 "$staged" | /usr/bin/awk '{print $1}')"
-    [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件包持久副本校验失败。'
-    /bin/mv -n "$staged" "$package_path"
-    [ ! -e "$staged" ] || fail 'DSH 插件包目标在复制时被占用。'
-  fi
-
+  local backup_dir filename workspace_file staged
   backup_dir="$DSH_DATA_HOME/backups/playbook-dsh/$(/bin/date +%Y%m%d-%H%M%S)-$$"
   (umask 077; /bin/mkdir -p "$backup_dir")
   for filename in package.json pnpm-lock.yaml pnpm-workspace.yaml; do
@@ -185,9 +159,9 @@ install_dsh_plugin() {
     fi
   done
   if [ "$DSH_TARGET_PROFILE" = 'desktop' ] && [ "${DSH_SHELL:-}" = '1' ]; then
-    printf 'Playbook: Skill 已安装；DSH Desktop 正在运行，插件包已下载并校验：%s\n' "$package_path" >&2
+    printf 'Playbook: Skill 已安装；DSH Desktop 正在运行，请从 npm 注册表安装：%s\n' "$DSH_PLUGIN_SPEC" >&2
     printf 'Playbook: DSH 配置备份：%s\n' "$backup_dir" >&2
-    printf '%s\n' 'Playbook: 请让当前 DSH 智能体调用 plugin_manager：先 list_bundles，再 install_bundle，target 使用上面的绝对路径；若返回 pendingBuilds 仅包含 esbuild，可批准该项并重试。核对 Playbook 入口后才算完成。' >&2
+    printf '%s\n' 'Playbook: 请在当前 DSH 中调用 plugin_manager：先 list_bundles，再以以上包名和版本为 target 调用 install_bundle；若返回 pendingBuilds 仅包含 esbuild，可批准该项并重试。核对插件来源为注册表且版本正确后才算完成。' >&2
     return 4
   fi
 
@@ -227,9 +201,14 @@ install_dsh_plugin() {
     /bin/mv "$staged" "$workspace_file"
     /usr/bin/grep -q '^  esbuild: true$' "$workspace_file" || fail 'DSH esbuild 放行配置写入失败。'
   fi
-  "$DSH_CLI" plugin --profile "$DSH_TARGET_PROFILE" add "$package_path" || fail "DSH 插件安装失败；配置备份位于 $backup_dir"
+  "$DSH_CLI" plugin --profile "$DSH_TARGET_PROFILE" add "$DSH_PLUGIN_SPEC" || fail "DSH 插件安装失败；配置备份位于 $backup_dir"
   /usr/bin/plutil -extract dsh.profile.bundles json -o - "$DSH_TARGET_DIR/package.json" | /usr/bin/grep -q '"playbook-dsh"' || fail 'DSH profile 未启用 playbook-dsh。'
   [ -f "$DSH_TARGET_DIR/node_modules/playbook-dsh/server.mjs" ] || fail 'DSH 插件包文件缺失。'
+  [ "$(/usr/bin/plutil -extract version raw -o - "$DSH_TARGET_DIR/node_modules/playbook-dsh/package.json")" = "$DSH_PLUGIN_VERSION" ] || fail 'DSH 插件安装版本不符。'
+  case "$(/usr/bin/plutil -extract dependencies.playbook-dsh raw -o - "$DSH_TARGET_DIR/package.json")" in
+    "$DSH_PLUGIN_VERSION"|"^$DSH_PLUGIN_VERSION"|"~$DSH_PLUGIN_VERSION") ;;
+    *) fail 'DSH 插件依赖未记录为 npm 注册表版本。' ;;
+  esac
   printf 'DSH 插件已安装到 %s，配置备份：%s\n' "$DSH_TARGET_PROFILE" "$backup_dir" >&2
 }
 

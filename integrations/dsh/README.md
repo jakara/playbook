@@ -6,18 +6,20 @@
 
 ## 制作与安装
 
-Playbook 的 `skills/playbook-wright/scripts/install.sh --install --framework dsh --scope user` 在 DSH Shell 中会识别当前 profile，安装 Skill 后下载、校验并安装此插件。运行中的 DSH Desktop 需要由当前智能体通过内置 `plugin_manager` 完成插件写入；安装器会保留已校验的包和 profile 配置备份，并以退出码 4 明确标记待完成。
+Playbook 的 `skills/playbook-wright/scripts/install.sh --install --framework dsh --scope user` 在 DSH Shell 中会识别当前 profile，安装 Skill 后从 npm 注册表安装 `playbook-dsh@0.11.1`。运行中的 DSH Desktop 需要通过插件管理界面安装；安装器会备份 profile 配置，并以退出码 4 提示改在 DSH 内操作。
 
-在 Playbook 仓库根目录先运行 `npm ci`、`npm run desktop:build`。然后在 `integrations/dsh` 运行 `npm pack`，得到 `playbook-dsh-0.11.0.tgz`。将它装入 DSH 图形界面的 profile，例如本机 Web profile：
+在 DSH 的「插件 → 添加插件」中输入 `playbook-dsh@0.11.1`，选择 npm 注册表并确认来源、版本。已有从本地 `.tgz` 安装的旧版时，先在 DSH 插件管理界面卸载旧插件，再按包名安装；项目设置和运行记录保存在 `$DSH_HOME/playbook`，卸载插件依赖不会删除它们。DSH 0.2.1-rc.3 尚不提供第三方插件的详情页更新按钮；支持注册表插件更新的 DSH 版本发布后，详情页才能检查新版并提供更新操作。
+
+在隔离 Web profile 中也可通过命令安装：
 
 ```sh
-dsh plugin --profile web add ./playbook-dsh-0.11.0.tgz
+dsh plugin --profile web add playbook-dsh@0.11.1
 dsh web
 ```
 
 若 DSH 的 pnpm 在首次安装时提示 `Ignored build scripts: esbuild`，在该隔离 profile 的 `pnpm-workspace.yaml` 中将 `allowBuilds.esbuild` 设为 `true` 后重试。只需放行这一项；安装成功后用 `dsh --profile web --dump-config` 确认出现 `playbook-dsh` 层。
 
-也可在本机 Playbook checkout 中用 `npm run bundle:runtime` 后，将 `integrations/dsh` 作为本地链接安装。打包时 `prepack` 会重新收集已构建的 Playbook 运行文件；它不会修改 Electron 入口或 `package:mac` 流程。
+维护者在 Playbook 仓库根目录运行 `npm ci`、`npm run desktop:build`，然后在 `integrations/dsh` 运行 `npm pack` 核对待发布内容。`prepack` 会重新收集已构建的 Playbook 运行文件并检查应用、Skill、插件与安装器版本一致；发布到 npm 注册表后，用户按包名安装，以便 DSH 识别注册表来源。
 
 插件服务仅监听本机 `127.0.0.1:43188`。该端口需要空闲，DSH 与受控 Chrome 需要运行在同一台机器；当前版本的 DSH 远程 Web 客户端不能通过远端浏览器控制本机 Playbook。演示使用本机 Google Chrome。项目设置与运行记录写到 `$DSH_HOME/playbook`，与 Electron 版用户数据隔离。插件停用时会请求停止当前演示并等待资源释放回执。
 

@@ -1,6 +1,6 @@
 {
   "name": "playbook-dsh",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -11,7 +11,11 @@
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar"] }
   },
-  "files": ["index.js", "server.mjs", "bridge.js", "client.js", "cordis.patch.yml", "runtime/**", "README.md"],
+  "files": ["index.js", "server.mjs", "bridge.js", "client.js", "cordis.patch.yml", "runtime/**", "README.md", "LICENSE"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/jakara/playbook.git", "directory": "integrations/dsh" },
+  "homepage": "https://github.com/jakara/playbook/tree/main/integrations/dsh#readme",
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
   "scripts": { "bundle:runtime": "node scripts/pack-runtime.mjs", "prepack": "npm run bundle:runtime" },
   "dependencies": {
     "@playwright/test": "1.58.2",

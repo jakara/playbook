@@ -1,7 +1,7 @@
 <p align="center"><img src="assets/playbook-mark.svg" width="88" alt="Playbook：书本与播放三角"></p>
 <h1 align="center">Playbook</h1>
 <p align="center"><strong>the show must go on</strong></p>
-<p align="center"><a href="https://github.com/jakara/playbook/releases/latest">下载</a> · <a href="install.md">安装指引</a> · <a href="#快速开始">快速开始</a> · <a href="skills/playbook-wright/SKILL.md">Skill</a> · <a href="docs/architecture.md">技术架构</a></p>
+<p align="center"><a href="https://github.com/jakara/playbook/releases/latest">下载</a> · <a href="install.md">安装指引</a> · <a href="#快速开始">快速开始</a> · <a href="skills/playbook-wright/SKILL.md">Skill</a> · <a href="integrations/dsh/README.md">DSH 插件</a> · <a href="docs/architecture.md">技术架构</a></p>
 
 Playbook 是一个软件演示播放器，用于客户验收、培训和流程讲解。它按预设脚本操作真实页面，配合开场介绍、箭头提示、蒙层和语音，演示功能如何使用、操作后有什么结果。流程可以自动播放，也可以停下来让观众亲自操作。
 

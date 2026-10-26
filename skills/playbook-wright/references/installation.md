@@ -10,7 +10,7 @@ bash scripts/install.sh --ensure-app
 
 - `--check-app` 只检查，不下载、不创建目录：找到返回 0，未安装返回 3，不支持的平台返回 2。
 - `--app-dir /绝对目录` 显式指定安装位置；提供后只在该位置检查，方便用户选择或隔离验收。默认还检查 `/Applications`、用户 Applications、`PLAYBOOK_APP_PATH` 和产品仓库开发包位置。
-- `PLAYBOOK_RELEASE_TAG=v0.7.1` 固定所有下载资产到同一正式版本；外层安装 prompt 已解析 tag 时必须传递，不能重新查询 latest 混用不同版本的安装器和包。
+- `PLAYBOOK_RELEASE_TAG=v0.11.1` 固定所有下载资产到同一正式版本；外层安装 prompt 已解析 tag 时必须传递，不能重新查询 latest 混用不同版本的安装器和包。
 - 当前仅支持 macOS arm64。应用暂未完成 Apple 开发者签名和公证，首次运行可能需要用户通过系统安全界面确认。不能关闭 Gatekeeper、清除 quarantine 或伪造已成功运行。
 
 用户要求安装/更新本 Skill 时，可用同一工具：
