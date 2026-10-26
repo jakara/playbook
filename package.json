@@ -62,7 +62,6 @@
       "examples/tutorial/**/*",
       "assets/**/*",
       "LICENSE",
-      "LICENSE_SCOPE.md",
       "install.md"
     ],
     "mac": {
@@ -88,5 +87,5 @@
     "type": "git",
     "url": "https://github.com/jakara/playbook.git"
   },
-  "author": "jakara"
+  "author": "Playbook contributors"
 }

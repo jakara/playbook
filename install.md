@@ -4,7 +4,7 @@
 
 本指引配合正式 GitHub Release 的安装接口。若所需资产尚未发布，停止并说明缺少的资产；不改用未知镜像、猜测下载地址或宣称已完成。
 
-此流程安装客户端和完整的 `playbook-wright` Skill，包含演示创作、维护、呈现调整与 Playwright TC 双向复用/转换指引；`playbook-playwright` 保留为兼容入口。客户端、SDK 和完整 Skill 由 jakara 按 MIT 许可发布，随公开仓库、应用和 `playbook-skills.tar.gz` 交付，见 [LICENSE](LICENSE) 和 [LICENSE_SCOPE.md](LICENSE_SCOPE.md)。
+此流程安装客户端和完整的 `playbook-wright` Skill，包含演示创作、维护、呈现调整与 Playwright TC 双向复用/转换指引；`playbook-playwright` 保留为兼容入口。客户端和 Skill 均采用 [MIT](LICENSE) 许可。
 
 ## 1. 确定安装目标
 

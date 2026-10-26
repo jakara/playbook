@@ -129,4 +129,4 @@ npm run package:mac    # macOS Apple Silicon 分发包
 
 ## 许可
 
-客户端、SDK、Skill、文档和图标均采用 [MIT License](LICENSE)，详见[许可范围](LICENSE_SCOPE.md)。
+[MIT](LICENSE)

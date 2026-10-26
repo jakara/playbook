@@ -1,6 +1,6 @@
 # README 与完整 Skill 开源 · v0.7.1 / Skill 0.10.1
 
-日期：2026-10-25。按新的分发决定，客户端、SDK、完整 Skill、文档与图标统一 MIT，亦覆盖作者拥有版权的历史完整 Skill；旧版本记录保留，当前许可范围见 `LICENSE_SCOPE.md`。
+日期：2026-10-25。按新的分发决定，客户端、SDK、完整 Skill、文档与图标统一 MIT，亦覆盖作者拥有版权的历史完整 Skill；旧版本记录保留，许可证见 `LICENSE`。
 
 - README 改为用途、安装、播放、项目文件和开发说明，保留 slogan，删除商业分层、图标寓意和重复宣传。按 no-ai-slop 的 `eval.md` 逐项复核；主 Agent 直接完成编辑与复核。
 - 完整 Skill 的创作、维护、呈现、生命周期、PPTX 与 TC 双向转换资料恢复至公开 `skills/`，共18个源文件、11份参考资料。`.private/` 只保留本地历史快照，不参与打包。
@@ -13,7 +13,7 @@
 
 日期：2026-10-24。本节记录本地验证；GitHub 构建/发布结果以对应 Actions 和 Release 为准。
 
-- 客户端、SDK 和 community-bootstrap 基础引导使用 MIT。完整专业 Skill 已逐文件复制、校验到本机 `.private/skills/`，未加入版本管理。公开两个调用名只提供安装与接入，不能取得专业版。旧公开 Git 历史保留，许可范围见 `LICENSE_SCOPE.md`。
+- 客户端、SDK 和 community-bootstrap 基础引导使用 MIT。完整专业 Skill 已逐文件复制、校验到本机 `.private/skills/`，未加入版本管理。公开两个调用名只提供安装与接入，不能取得专业版。旧公开 Git 历史保留，许可证见 `LICENSE`。
 - 完整 `npm run check`：193 项自动检查，192 通过、1 平台跳过、0 失败；3 个示例 TC 通过，original/shared/standalone 三种入口都能拒绝刻意修改的业务预期。最终本地日志位于 `artifacts/release-0.7.0/local-check.log`。
 - 安装 fixture：旧兼容应用复用并执行下载的独立 CLI、首次安装、幂等重跑、完整/专业版本保护、明确替换与备份、本地修改/软链接保护、固定 tag、错误摘要和不安全 tar 拒绝；并发目标占用时保持用户目录且不嵌套写入应用。测试不写真实智能体配置。
 - 发布 fixture：新系列保留旧系列，同系列补丁先完整上传、核验、发布再删除较低补丁 Release；Git tags、draft 和 prerelease 保留。创建、上传、校验、发布或 tag 校验失败不会删除旧版；同版本普通推送不移动发布 tag。

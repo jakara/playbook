@@ -2,7 +2,7 @@
 
 发布目标为 **macOS Apple Silicon**。客户端版本来自 `package.json`，Skill 版本保存在 Skill 入口；清单和脚本的 `schemaVersion` 不随客户端 patch 自动改变。
 
-客户端、SDK、完整创作/维护/TC Skill、文档和图标由 **jakara** 按 MIT 许可发布，具体范围见 [LICENSE](../LICENSE) 和 [LICENSE_SCOPE.md](../LICENSE_SCOPE.md)。完整 Skill 在公开仓库、应用和 Release 中保持一致。
+项目采用 [MIT](../LICENSE) 许可。完整 Skill 在公开仓库、应用和 Release 中保持一致。
 
 `skills/` 是完整 Skill 的发布来源；gitignored `.private/` 仅作维护者本地备份，不进入公开 Git、应用包或 Release。
 
