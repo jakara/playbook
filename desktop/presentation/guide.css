@@ -31,6 +31,19 @@
 .ygd-click .ygd-ripple { animation: ygd-click .65s ease-out; }
 .driver-popover.ygd-popover { min-width: 300px; max-width: 360px; padding: 22px 25px; border-radius: 12px; border: 1px solid #dce6f0; box-shadow: 0 16px 50px #13233d35; font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
 .driver-popover.ygd-text-popover { position: absolute; z-index: 2; min-width: 0; max-width: none; margin: 0; pointer-events: none !important; }
+.driver-active #ygd-root .ygd-text-editor,
+.driver-active #ygd-root .ygd-text-editor * { pointer-events: auto !important; }
+#ygd-root .ygd-text-editor { display: none; margin-top: 14px; border-top: 1px solid #e1e8f1; padding-top: 12px; }
+#ygd-root[data-phase="paused"] .ygd-text-editor { display: block; }
+.ygd-text-editor .ygd-edit-button { padding: 5px 11px; border: 1px solid #adc4e5; border-radius: 7px; background: #eef5ff; color: #24528d; font-size: 13px; }
+.ygd-text-editor form label { display: block; margin: 9px 0; color: #526079; font-size: 12px; font-weight: 650; }
+.ygd-text-editor input, .ygd-text-editor textarea { display: block; width: 100%; margin-top: 4px; padding: 7px 9px; border: 1px solid #adc4d6; border-radius: 6px; background: white; color: #142139; font: 14px/1.5 -apple-system,"PingFang SC",sans-serif; resize: vertical; }
+.ygd-text-editor .ygd-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.ygd-text-editor .ygd-edit-actions button { padding: 6px 10px; border: 1px solid #adc4d6; border-radius: 6px; background: white; color: #24528d; font-size: 13px; }
+.ygd-text-editor .ygd-edit-actions button[type="submit"] { background: #24528d; color: white; }
+.ygd-text-editor .ygd-edit-error { margin: 8px 0 0; color: #b33333; font-size: 12px; }
+.ygd-popover.ygd-editing { max-height: calc(100vh - 24px); overflow-y: auto; }
+.ygd-popover.ygd-editing .driver-popover-arrow { display: none; }
 .ygd-popover .driver-popover-title { font-size: 20px; line-height: 1.5; font-weight: 700; color: #1a2c48; padding: 0; }
 .ygd-popover .driver-popover-description { color: #526079; font-size: 15px; line-height: 1.85; margin-top: 9px; }
 .ygd-step-tag { display: block; margin-bottom: 9px; color: #3f71b5; font-size: 11px; font-weight: 650; letter-spacing: .7px; }

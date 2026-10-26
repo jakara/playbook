@@ -15,6 +15,7 @@ function mainContext(extra = {}) {
   const context = vm.createContext({
     messages, activeRun: { id: 'run', state: 'playing' }, worker: { postMessage: message => messages.push(message) },
     controlIntent: { runId: 'run', paused: false, stopped: false, ready: true },
+    annotationMode: false, publish: () => {},
     terminal: state => ['completed', 'failed', 'stopped'].includes(state),
     quitting: false, tutorialActions: new Set(), guardRun: () => {}, setTimeout: () => {}, disposeWorker: async () => {}, playbackSelection: null, window: null,
     ...extra,
@@ -146,7 +147,7 @@ test('a newer pause wins while resume is awaiting browser activation', async () 
   const context = vm.createContext({ paused: true, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
     activeScope:null, manualGate: null, foreground: () => focusPending, state: async () => {}, change: () => {}, process: {},
   });
-  vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);
+  vm.runInContext(`var page = null, annotationTask = null;\n${runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message'))}`, context);
   const resume = vm.runInContext("commandHandler({command:'resume'})", context);
   await vm.runInContext("commandHandler({command:'pause'})", context);
   focused(); await resume;
@@ -159,7 +160,7 @@ test('manual resume cannot continue while a real file operation is busy', async 
   const context = vm.createContext({ manualGate: gate, paused: false, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
     activeScope: null, foreground: async () => { focusCalls++; }, state: async () => {}, change: () => {}, process: {},
   });
-  vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);
+  vm.runInContext(`var page = null, annotationTask = null;\n${runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message'))}`, context);
   await vm.runInContext("commandHandler({command:'resume'})", context);
   assert.equal(focusCalls, 0);
   assert.equal(continuations, 0);
@@ -172,7 +173,7 @@ test('a newer manual pause wins while continue is awaiting browser activation', 
   const context = vm.createContext({ manualGate: gate, current: { interaction: {} }, Date, paused: false, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
     activeScope: null, foreground: () => focusPending, state: async () => {}, change: () => {}, process: {},
   });
-  vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);
+  vm.runInContext(`var page = null, annotationTask = null;\n${runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message'))}`, context);
   const resume = vm.runInContext("commandHandler({command:'resume'})", context);
   await vm.runInContext("commandHandler({command:'pause'})", context);
   focused(); await resume;
@@ -187,7 +188,7 @@ test('stopping during manual browser activation never resumes a stale handoff', 
   const context = vm.createContext({ manualGate: gate, current: { interaction: {} }, paused: false, pauseVersion: 0, running: true, stopped: false, closing: false, packaging: false,
     activeScope: null, foreground: () => focusPending, state: async () => {}, stopVoice: async () => {}, ui: async method => { if (method === 'cancel') cancelled++; }, change: () => {}, process: {}, executionAbort: null, narrationAbort: null,
   });
-  vm.runInContext(runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message')), context);
+  vm.runInContext(`var page = null, annotationTask = null;\n${runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message'))}`, context);
   const resume = vm.runInContext("commandHandler({command:'resume'})", context);
   await vm.runInContext("commandHandler({command:'stop'})", context);
   focused(); await resume;

@@ -38,9 +38,9 @@ TAG="${PLAYBOOK_RELEASE_TAG:-}"
 DSH_TARGET_PROFILE=''
 DSH_TARGET_DIR=''
 DSH_CLI=''
-DSH_PLUGIN_TAG='playbook-dsh-v0.1.0'
-DSH_PLUGIN_FILE='playbook-dsh-0.1.0.tgz'
-DSH_PLUGIN_SHA256='38a1a30d613f04ffb0d3740e6f08b50dc5c72dc368dc1e65f3c9db8bda063458'
+DSH_PLUGIN_TAG='playbook-dsh-v0.11.0'
+DSH_PLUGIN_FILE='playbook-dsh-0.11.0.tgz'
+DSH_PLUGIN_SHA256='d95d360ec2020547011f72a2eadbc46c6ea2bf1a2cd3c56f46b542993b6027f4'
 
 fail() { printf 'Playbook: %s\n' "$*" >&2; exit 1; }
 usage() {
@@ -150,6 +150,7 @@ verified_download() {
 }
 
 install_dsh_plugin() {
+  [ "$DSH_PLUGIN_SHA256" != 'STANDALONE_INSTALLER_ONLY' ] || fail '插件包内的 Skill 不执行插件自更新；请使用本版本 GitHub Release 的独立 install.sh。'
   local plugin_base="https://github.com/$REPOSITORY/releases/download/$DSH_PLUGIN_TAG"
   local expected actual package_dir package_path backup_dir filename workspace_file staged
   download "$plugin_base/SHA256SUMS" "$TEMP_ROOT/dsh-SHA256SUMS" || fail '无法下载 DSH 插件校验清单。'

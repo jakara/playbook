@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const playing = run => run && ['waiting', 'preparing', 'playing', 'paused', 'pausing', 'stopping', 'exporting', 'cleaning', 'recovering'].includes(run.state);
 
-export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityChange, isEmbeddedVisible = () => false }) {
+export function createPlaybackControl({ appRoot, getRun, getAnnotationMode = () => false, shortcut, onVisibilityChange, isEmbeddedVisible = () => false }) {
   const window = new BrowserWindow({ title: 'Playbook 播放控制', width: 800, height: 104, show: false,
     frame: false, transparent: true, hasShadow: false, resizable: false, movable: true,
     focusable: false, skipTaskbar: true, fullscreenable: false, acceptFirstMouse: true,
@@ -16,7 +16,7 @@ export function createPlaybackControl({ appRoot, getRun, shortcut, onVisibilityC
   let collapsed = false, positioned = false;
   const state = () => {
     const run = getRun();
-    return { visible: !window.isDestroyed() && window.isVisible(), collapsed, shortcut,
+    return { visible: !window.isDestroyed() && window.isVisible(), collapsed, shortcut, annotationMode: getAnnotationMode(),
       run: run ? Object.fromEntries(['id', 'title', 'state', 'total', 'completed', 'index', 'stepTitle', 'sectionTitle', 'stopRequested', 'interaction'].map(key => [key, run[key]])) : null };
   };
   const publish = () => { if (!window.isDestroyed()) window.webContents.send('playbook:control-state', state()); };

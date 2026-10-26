@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { narrationSource } from './narration.mjs';
@@ -14,7 +15,8 @@ const change = update => send({ type: 'state', update });
 class Stopped extends Error {}
 let browser, page, running = false, stopped = false, paused = false, inOperation = false, closing = false, pauseVersion = 0;
 let position = { x: 900, y: 600 }, current = {}, config;
-let narrationAbort, executionAbort, activeScope, manualGate, currentFlowId;
+let narrationAbort, executionAbort, activeScope, manualGate, currentFlowId, annotationTask, textEditTask;
+let streamVersion = 0, streamAudioPhase;
 const pendingRequests = new Map();
 function request(type, value) {
   const requestId = `${process.pid}-${Date.now()}-${Math.random()}`;
@@ -46,7 +48,9 @@ async function capture(name) {
 async function ui(method, value) {
   if (page && !page.isClosed()) await page.evaluate(({ method, value }) => {
     if (method === 'state') window.playbookNarration?.state(value);
-    return window.playbookGuide?.[method](value);
+    const result = window.playbookGuide?.[method](value);
+    if (['center', 'highlight', 'interactive'].includes(method)) window.playbookAnnotations?.raise();
+    return result;
   }, { method, value });
 }
 async function voiceSource(flow, clip, fallback) {
@@ -59,10 +63,12 @@ async function voiceSource(flow, clip, fallback) {
 }
 function startVoice(source) {
   if (!source) return async () => {};
+  if (config.stream) { send({ type: 'stream-audio', action: 'play', source }); streamAudioPhase = 'playing'; }
   const task = page.evaluate(value => window.playbookNarration.play(value), source).then(() => null, error => error);
-  return async () => { const error = await task; if (error) throw error; };
+  return async () => { const error = await task; if (config.stream) { send({ type: 'stream-audio', action: 'stop' }); streamAudioPhase = 'stopped'; } if (error) throw error; };
 }
 async function stopVoice() {
+  if (config?.stream) { send({ type: 'stream-audio', action: 'stop' }); streamAudioPhase = 'stopped'; }
   if (page && !page.isClosed()) await page.evaluate(() => window.playbookNarration?.stop()).catch(() => {});
 }
 async function foreground() {
@@ -82,6 +88,7 @@ async function foreground() {
 }
 async function state() {
   const phase = activeScope?.receipt.status === 'running' ? 'cleaning' : stopped ? 'stopping' : packaging ? 'exporting' : manualGate ? 'waiting' : paused ? inOperation ? 'pausing' : 'paused' : 'playing';
+  if (config?.stream && streamAudioPhase && streamAudioPhase !== phase && ['playing', 'paused', 'pausing', 'stopping', 'cleaning'].includes(phase)) { send({ type: 'stream-audio', action: ['paused', 'pausing'].includes(phase) ? 'pause' : phase === 'playing' ? 'resume' : 'stop' }); streamAudioPhase = phase; }
   change({ state: phase, ...current }); await ui('state', { phase, title: current.stepTitle || config.title, count: `${current.index || 0} / ${current.total || 0}`, progress: current.total ? current.completed / current.total * 100 : 0 });
 }
 async function checkpoint() {
@@ -96,10 +103,12 @@ async function wait(ms) {
 async function inject() {
   if (await page.evaluate(() => Boolean(window.playbookGuide))) return;
   const from = relative => path.join(config.appRoot, relative);
-  await page.addStyleTag({ content: await readFile(from('node_modules/driver.js/dist/driver.css'), 'utf8') });
+  const driverDist = path.dirname(createRequire(path.join(config.appRoot, 'package.json')).resolve('driver.js'));
+  await page.addStyleTag({ content: await readFile(path.join(driverDist, 'driver.css'), 'utf8') });
   await page.addStyleTag({ content: await readFile(from('desktop/presentation/guide.css'), 'utf8') });
-  await page.addScriptTag({ content: await readFile(from('node_modules/driver.js/dist/driver.js.iife.js'), 'utf8') });
+  await page.addScriptTag({ content: await readFile(path.join(driverDist, 'driver.js.iife.js'), 'utf8') });
   await page.addScriptTag({ content: await readFile(from('desktop/presentation/guide.js'), 'utf8') });
+  await page.addScriptTag({ content: await readFile(from('desktop/presentation/annotation.js'), 'utf8') });
   await page.addScriptTag({ content: await readFile(from('desktop/presentation/narration.js'), 'utf8') });
   await ui('place', position);
 }
@@ -144,6 +153,22 @@ async function embeddedContext() {
   context.close = async () => { for (const item of owned) await item.close().catch(() => {}); };
   return context;
 }
+async function startStream(targetPage) {
+  if (!config.stream) return;
+  const version = ++streamVersion;
+  const capture = async () => {
+    while (version === streamVersion && targetPage === page && !targetPage.isClosed()) {
+      try {
+        const bytes = await targetPage.screenshot({ type: 'jpeg', quality: 70, animations: 'allow', timeout: 3000 });
+        if (version === streamVersion && targetPage === page) send({ type: 'stream-frame', data: bytes.toString('base64'), width: 1440, height: 900 });
+      } catch { /* Navigation briefly removes the frame; the next capture retries. */ }
+      await sleep(180);
+    }
+  };
+  void capture();
+  send({ type: 'stream-ready', width: 1440, height: 900 });
+  targetPage.once('close', () => { if (version === streamVersion) streamVersion++; });
+}
 function listenManualInput() {
   if (window.__playbookManualInput) { window.__playbookManualInput.active = true; return; }
   const value = window.__playbookManualInput = { active: true, at: Date.now() };
@@ -186,6 +211,7 @@ async function manualStep(step) {
 
 async function run(input) {
   config = input; running = true; stopped = false; paused = Boolean(input.paused); pauseVersion = 0;
+  streamAudioPhase = undefined;
   packaging = false; scenes = []; manualGate = null;
   narrationAbort = new AbortController();
   let preparing = true, finalUpdate, executionError;
@@ -205,7 +231,7 @@ async function run(input) {
     if (config.embedded) context = await embeddedContext();
     else {
       browser = await chromium.launch({ channel: 'chrome', headless: config.headless, args: ['--start-maximized', '--autoplay-policy=no-user-gesture-required'] });
-      context = await browser.newContext({ viewport: config.exportDir ? { width: 1440, height: 810 } : config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
+      context = await browser.newContext({ viewport: config.exportDir ? { width: 1440, height: 810 } : config.stream ? { width: 1440, height: 900 } : config.headless ? { width: 1440, height: 960 } : null, locale: 'zh-CN', bypassCSP: true });
     }
     inOperation = false; await checkpoint();
     const total = flows.reduce((count, flow) => count + flow.steps.length, 0);
@@ -216,6 +242,19 @@ async function run(input) {
       await checkpoint();
       if (page && !page.isClosed()) await page.close();
       page = await context.newPage(); page.setDefaultTimeout(15000);
+      const editPage = page;
+      await page.exposeFunction('__playbookSaveStepText', async value => {
+        if (textEditTask || !running || !paused || stopped || closing || manualGate || editPage !== page || editPage.isClosed()
+          || !current.stepId || typeof value?.title !== 'string' || typeof value?.explain !== 'string') throw new Error('当前步骤未处于可编辑的暂停状态');
+        const stepId = current.stepId, flowId = currentFlowId;
+        textEditTask = request('step-text-save', { stepId, flowId, title: value.title, explain: value.explain });
+        try {
+          const saved = await textEditTask;
+          current.stepTitle = saved.title;
+          return saved;
+        } finally { textEditTask = null; }
+      });
+      await startStream(page);
       if (flow.redactions?.length) {
         const privacy = `window.__playbookRedactions = ${JSON.stringify(flow.redactions)};\n${await readFile(path.join(config.appRoot, 'desktop/presentation/privacy.js'), 'utf8')}`;
         await page.addInitScript({ content: privacy });
@@ -370,20 +409,54 @@ async function recover(input) {
 }
 
 async function commandHandler({ command, config: input, busy: inputBusy }) {
+  if (command === 'stream-input') {
+    if (!config?.stream || !page || page.isClosed() || stopped || closing || (!paused && !manualGate)) return;
+    const event = input;
+    if (!event || typeof event !== 'object') return;
+    const x = Number(event.x), y = Number(event.y);
+    if (['move', 'down', 'up', 'wheel'].includes(event.type) && (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1440 || y < 0 || y > 900)) return;
+    if (event.type === 'move') await page.mouse.move(x, y);
+    else if (event.type === 'down') await page.mouse.move(x, y).then(() => page.mouse.down({ button: ['left', 'right', 'middle'].includes(event.button) ? event.button : 'left' }));
+    else if (event.type === 'up') await page.mouse.up({ button: ['left', 'right', 'middle'].includes(event.button) ? event.button : 'left' });
+    else if (event.type === 'wheel') await page.mouse.wheel(Math.max(-2000, Math.min(2000, Number(event.deltaX) || 0)), Math.max(-2000, Math.min(2000, Number(event.deltaY) || 0)));
+    else if (event.type === 'text' && typeof event.text === 'string' && event.text.length <= 1000) await page.keyboard.type(event.text);
+    else if (event.type === 'key' && typeof event.key === 'string' && /^[A-Za-z0-9]+$/.test(event.key)) await page.keyboard.press(event.key);
+    return;
+  }
   if (command === 'recover' && !running) { void recover(input); return; }
   if (command === 'start' && !running) { void run(input); return; }
+  if (command === 'annotation-start') {
+    if (!running || !paused || stopped || closing || !page || page.isClosed() || manualGate || annotationTask) return;
+    const targetPage = page, stepId = current.stepId, flowId = currentFlowId, version = pauseVersion;
+    annotationTask = (async () => {
+      try {
+        await foreground(); await inject();
+        const annotation = await targetPage.evaluate(() => window.playbookAnnotations.start());
+        if (!annotation || !paused || stopped || closing || targetPage !== page || targetPage.isClosed() || version !== pauseVersion) return;
+        const saved = await request('annotation-save', { annotation, stepId, flowId });
+        if (!stopped && !closing && targetPage === page && !targetPage.isClosed()) await targetPage.evaluate(value => window.playbookAnnotations?.commit(value.annotation, value.prompt), saved);
+      } catch (error) {
+        if (targetPage === page && !targetPage.isClosed()) await targetPage.evaluate(message => window.playbookAnnotations?.saveError(message), safeError(error)).catch(() => {});
+        change({ warning: `批注未保存：${safeError(error)}` });
+      } finally { annotationTask = null; send({ type: 'annotation-mode', active: false }); }
+    })();
+    return;
+  }
+  if (command === 'annotation-cancel') { await page?.evaluate(() => window.playbookAnnotations?.cancelPick()).catch(() => {}); send({ type: 'annotation-mode', active: false }); return; }
   if (command === 'interaction-busy' && manualGate) { if (inputBusy) pauseVersion++; manualGate.setBusy(inputBusy); current.interaction = { ...current.interaction, ...manualGate.state() }; await state(); return; }
   if (command === 'pause' && manualGate) { pauseVersion++; manualGate.update(Date.now()); manualGate.paused = true; current.interaction = { ...current.interaction, ...manualGate.state() }; await state(); return; }
   if (command === 'resume' && manualGate) { const gate = manualGate, requested = ++pauseVersion; if (!gate.busy) { await foreground(); if (manualGate === gate && requested === pauseVersion && !stopped && !closing && !gate.busy) gate.resume(); } return; }
   if (command === 'pause' && running && !packaging && activeScope?.receipt.status !== 'running') { pauseVersion++; paused = true; await state(); }
   if (command === 'resume' && running && !packaging && activeScope?.receipt.status !== 'running') {
     const requested = ++pauseVersion;
+    await page?.evaluate(() => window.playbookAnnotations?.cancelPick()).catch(() => {});
     try { await foreground(); }
     catch { change({ warning: '演示窗口未能置前，请检查受控浏览器窗口。' }); }
     if (requested === pauseVersion && !stopped && !closing) { paused = false; await state(); }
   }
   if (command === 'stop' || command === 'close') {
     pauseVersion++; stopped = true; paused = false; closing ||= command === 'close';
+    await page?.evaluate(() => window.playbookAnnotations?.cancelPick()).catch(() => {});
     executionAbort?.abort(); narrationAbort?.abort(); await ui('cancel').catch(() => {}); await stopVoice();
     if (running) await state();
     else if (closing) { await browser?.close().catch(() => {}); process.exit(0); }

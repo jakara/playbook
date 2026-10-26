@@ -7,11 +7,11 @@
     <div id="ygd-cursor" aria-hidden="true"><span class="ygd-halo"></span><svg viewBox="0 0 32 40"><path d="M3 2 L3 31 L11 23 L17 37 L23 34 L17 20 L29 20 Z" fill="white" stroke="#142139" stroke-width="2.4" stroke-linejoin="round"/></svg><span class="ygd-ripple"></span></div>
     <section id="ygd-card" aria-live="polite" hidden></section>
 `;
-  document.body.append(root); root.showPopover();
+  document.documentElement.append(root); root.showPopover();
   const $ = selector => root.querySelector(selector);
   const cursor = $('#ygd-cursor'), hole = $('#ygd-hole'), card = $('#ygd-card');
   let position = { x: innerWidth * .7, y: innerHeight * .65 };
-  let textSession, cancelled = false;
+  let textSession, cancelled = false, activeEditor;
   const driver = window.driver.js.driver({
     animate: true, duration: 280, overlayOpacity: 0,
     allowClose: false, allowKeyboardControl: false, showButtons: [],
@@ -21,7 +21,7 @@
   function bringForward(element) {
     root.style.removeProperty('display');
     if (root.matches(':popover-open')) root.hidePopover();
-    const parent = element?.closest('dialog[open]') || document.querySelector('dialog[open]') || document.body;
+    const parent = element?.closest('dialog[open]') || document.querySelector('dialog[open]') || document.documentElement;
     if (root.parentElement !== parent) parent.append(root);
     root.showPopover();
   }
@@ -29,7 +29,10 @@
     position = { x, y }; cursor.style.transform = `translate(${x}px,${y}px)`;
     hole.setAttribute('cx', x); hole.setAttribute('cy', y);
   }
-  function state(value) { root.dataset.phase = value.phase; }
+  function state(value) {
+    root.dataset.phase = value.phase;
+    if (value.phase !== 'paused') activeEditor?.cancel();
+  }
   function center({ eyebrow, title, description, phase = 'ready' }) {
     clearText(); driver.destroy(); bringForward();
     card.replaceChildren(); card.hidden = false; cursor.hidden = true;
@@ -41,6 +44,54 @@
     state({ phase, title: phase === 'done' ? '演示已完成' : '核心操作流程', count: phase === 'done' ? '已完成' : '准备就绪', progress: phase === 'done' ? 100 : 0 });
   }
   const escape = value => String(value || '').replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' })[char]);
+  function addTextEditor(popover) {
+    activeEditor?.cancel();
+    const title = popover.querySelector('.driver-popover-title');
+    const description = popover.querySelector('.driver-popover-description');
+    const controls = document.createElement('div'); controls.className = 'ygd-text-editor';
+    const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'ygd-edit-button'; edit.textContent = '编辑文字';
+    const form = document.createElement('form'); form.hidden = true;
+    const titleLabel = document.createElement('label'); titleLabel.textContent = '标题';
+    const titleInput = document.createElement('input'); titleInput.type = 'text'; titleInput.maxLength = 500; titleInput.required = true;
+    const descriptionLabel = document.createElement('label'); descriptionLabel.textContent = '说明';
+    const descriptionInput = document.createElement('textarea'); descriptionInput.rows = 5; descriptionInput.maxLength = 5000; descriptionInput.required = true;
+    titleLabel.append(titleInput); descriptionLabel.append(descriptionInput);
+    const actions = document.createElement('div'); actions.className = 'ygd-edit-actions';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '取消';
+    const save = document.createElement('button'); save.type = 'submit'; save.textContent = '保存到 Playbook';
+    const error = document.createElement('p'); error.className = 'ygd-edit-error'; error.setAttribute('role', 'alert'); error.hidden = true;
+    actions.append(cancel, save); form.append(titleLabel, descriptionLabel, actions, error); controls.append(edit, form); popover.append(controls);
+    const fit = () => {
+      popover.style.removeProperty('translate');
+      const bounds = popover.getBoundingClientRect();
+      const dx = bounds.left < 12 ? 12 - bounds.left : bounds.right > innerWidth - 12 ? innerWidth - 12 - bounds.right : 0;
+      const dy = bounds.top < 12 ? 12 - bounds.top : bounds.bottom > innerHeight - 12 ? innerHeight - 12 - bounds.bottom : 0;
+      popover.style.translate = `${dx}px ${dy}px`;
+    };
+    const close = () => { form.hidden = true; edit.hidden = false; title.hidden = false; description.hidden = false; error.hidden = true; popover.classList.remove('ygd-editing'); popover.style.removeProperty('translate'); };
+    activeEditor = { cancel: close };
+    edit.addEventListener('click', () => {
+      if (root.dataset.phase !== 'paused') return;
+      titleInput.value = title.textContent; descriptionInput.value = description.textContent;
+      title.hidden = true; description.hidden = true; edit.hidden = true; form.hidden = false;
+      popover.classList.add('ygd-editing'); fit(); titleInput.focus();
+    });
+    descriptionInput.addEventListener('input', fit);
+    cancel.addEventListener('click', close);
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (root.dataset.phase !== 'paused') return;
+      const value = { title: titleInput.value, explain: descriptionInput.value };
+      if (!value.title.trim() || !value.explain.trim()) { error.textContent = '标题和说明不能为空'; error.hidden = false; return; }
+      save.disabled = true; cancel.disabled = true; error.hidden = true;
+      try {
+        const result = await window.__playbookSaveStepText(value);
+        title.textContent = result.title; description.textContent = result.explain;
+        close();
+      } catch (cause) { error.textContent = cause?.message || '保存失败，请重试'; error.hidden = false; }
+      finally { save.disabled = false; cancel.disabled = false; }
+    });
+  }
   let radius = 105, feather = 24;
   function configure(value) {
     radius = value.spotlightRadius ?? 105; feather = value.spotlightFeather ?? 24;
@@ -65,6 +116,8 @@
       if (!node.textContent.trim() || !node.parentElement?.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
       const range = document.createRange(); range.selectNodeContents(node);
       for (const rect of range.getClientRects()) {
+        // A clipped glyph row cannot be read, so never report it as a visible spotlight line.
+        if (rect.top < 0 || rect.bottom > innerHeight) continue;
         const left = Math.max(0, rect.left), top = Math.max(0, rect.top);
         const right = Math.min(innerWidth, rect.right), bottom = Math.min(innerHeight, rect.bottom);
         if (right > left && bottom > top) fragments.push({ left, top, right, bottom });
@@ -110,7 +163,7 @@
     const badge = document.createElement('span'); badge.className = 'ygd-step-tag'; badge.textContent = `步骤 ${String(step.index).padStart(2, '0')} / ${step.total} · ${step.actionLabel || '查看'}`;
     const title = document.createElement('div'); title.className = 'driver-popover-title'; title.textContent = step.title;
     const description = document.createElement('div'); description.className = 'driver-popover-description'; description.textContent = step.description;
-    popover.append(badge, title, description); root.append(popover);
+    popover.append(badge, title, description); addTextEditor(popover); root.append(popover);
     const controller = new AbortController();
     const session = { element, popover, controller, frame: 0, lines: [], observer: null, resize: null };
     const refresh = () => {
@@ -158,6 +211,7 @@
         const badge = document.createElement('span'); badge.className = 'ygd-step-tag';
         badge.textContent = `步骤 ${String(step.index).padStart(2, '0')} / ${step.total} · ${step.actionLabel || '查看'}`;
         popover.wrapper.prepend(badge);
+        addTextEditor(popover.wrapper);
         // 放在引导层内，确保正文和弹窗预览中都不被蒙层压暗。
         root.append(popover.wrapper);
       },

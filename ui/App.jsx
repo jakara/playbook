@@ -21,6 +21,7 @@ function Icon({ name, size = 20, ...props }) {
     arrow: <path d="m9 5 7 7-7 7" />,
     external: <><path d="M14 4h6v6M20 4 10 14" /><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></>,
     copy: <><rect x="8" y="8" width="12" height="13" rx="2" /><path d="M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4" /></>,
+    annotation: <><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9h8M8 12h5" /></>,
     check: <path d="m5 12 4 4L19 6" />,
     cross: <path d="m6 6 12 12M18 6 6 18" />,
     info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7v.2" /></>,
@@ -202,7 +203,7 @@ export default function App() {
   const names = { library: ['项目', '按 Book、Section 和脚本浏览，选择一个流程或按顺序播放全部。'], run: ['正在播放', '查看当前进度，并在需要时暂停或停止。'], history: ['运行记录', '回看每次播放结果，将反馈交给你的智能体。'], skills: ['Skill 安装', '为你的智能体安装 Playbook 创作、维护与测试转换能力。'] };
 
   if (!api) return <div className="bridge-missing"><div className="brand-icon"><Icon name="book" size={34} /></div><h1>请在 Playbook 桌面应用中打开</h1><p>此界面需要桌面应用提供本地项目和播放能力。</p><span>当前页面未连接桌面服务</span></div>;
-  if (data.embedded?.visible) return <EmbeddedPlayer run={active} pending={pending} error={notice?.type === 'error' ? notice.text : ''} active={data.embedded.active} onBack={() => act('embedded-back', () => api.showEmbedded(false))} control={command => act(command, () => api.control(command))} />;
+  if (data.embedded?.visible) return <EmbeddedPlayer run={active} annotationMode={data.annotationMode} pending={pending} error={notice?.type === 'error' ? notice.text : ''} active={data.embedded.active} onBack={() => act('embedded-back', () => api.showEmbedded(false))} control={command => act(command, () => api.control(command))} onAnnotate={() => act('annotate', () => api.annotate())} />;
   return <div className={`app-shell ${page === 'library' && current ? 'book-open' : ''}`}>
     <aside className="sidebar">
       <div className="traffic-space" />
@@ -210,7 +211,7 @@ export default function App() {
       <nav aria-label="主导航">
         {[
           ['library', 'folder', '项目'], ['run', 'play', '正在播放'], ['history', 'history', '运行记录'], ['skills', 'skill', 'Skill 安装'],
-        ].map(([id, icon, label]) => <button key={id} className={`nav-item ${page === id ? 'is-active' : ''}`} onClick={() => id === 'library' ? showList() : setPage(id)} aria-current={page === id ? 'page' : undefined}><Icon name={icon} size={19} /><span>{label}</span>{id === 'run' && busyRun && <i className={`live-dot ${active.state === 'paused' ? 'paused' : ''}`} />}</button>)}
+        ].map(([id, icon, label]) => <button key={id} className={`nav-item ${page === id ? 'is-active' : ''}`} aria-label={label} title={label} onClick={() => id === 'library' ? showList() : setPage(id)} aria-current={page === id ? 'page' : undefined}><Icon name={icon} size={19} /><span>{label}</span>{id === 'run' && busyRun && <i className={`live-dot ${active.state === 'paused' ? 'paused' : ''}`} />}</button>)}
       </nav>
       <div className="sidebar-projects"><div className="sidebar-label"><span>项目文件夹</span><button className="icon-button" title="添加项目文件夹" aria-label="添加项目" disabled={!!pending} onClick={addWorkspace}><Icon name="plus" size={17} /></button></div>
         <button className={`project-item ${filter === 'all' && page === 'library' ? 'is-selected' : ''}`} onClick={() => { setFilter('all'); setQuery(''); showList(); }}><Icon name="book" size={17} /><span>全部 Book</span></button>
@@ -239,8 +240,8 @@ export default function App() {
           {workspaces.filter(workspace => (filter === 'all' || workspace.id === filter) && workspace.error).map(workspace => <div className="inline-error" key={workspace.id}><Icon name="info" size={18} /><div><strong>{workspace.name} 暂时无法读取</strong><p>{workspace.error}</p></div></div>)}
         </section>
       </>)}
-      {page === 'run' && <div className="run-page">{active ? <RunDetail run={active} onShowEmbedded={data.embedded?.active ? () => act('embedded-show', () => api.showEmbedded(true)) : undefined} entries={entries} onCopy={() => copyContext(null, active)} pending={pending} busyRun={busyRun} onRecover={() => recoverRun(active)} control={command => act(command, () => api.control(command))} onOpenExport={reveal => openExport(active, reveal)} onHistory={() => { setSelectedRun(active.id); setPage('history'); }} onReplay={() => act('replay', async () => { await api.play({ workspaceId: active.workspaceId, entryId: active.entryId, kind: active.kind, profileId: active.profileId, browser: browserChoice || undefined }); setData(await api.getState()); })} /> : <Empty icon="play" title="准备好，就开始播放">从项目选择一个 Book、Section 或脚本，按既定步骤执行。</Empty>}{!active && <div className="empty-action"><Button className="primary" icon="library" onClick={() => setPage('library')}>前往项目</Button></div>}</div>}
-      {page === 'history' && <div className="history-split"><section className="history-list">{runs.map(run => <button className={`history-card ${historyRun?.id === run.id ? 'selected' : ''}`} key={run.id} onClick={() => setSelectedRun(run.id)} aria-label={`查看运行记录 ${run.title}`}><div className={`run-result-icon ${run.state}`}><Icon name={run.state === 'completed' ? 'check' : run.state === 'failed' ? 'info' : ACTIVE.includes(run.state) ? 'play' : 'stop'} size={18} /></div><div><h3>{run.title}</h3><p>{date(run.startedAt)}<span>·</span>{run.profileName || '默认运行方式'}</p><Status state={run.state} /></div><Icon name="arrow" className="card-chevron" size={16} /></button>)}{!runs.length && <Empty icon="history" title="还没有运行记录">完成一次播放后，结果和反馈会保存在这里。</Empty>}</section><section className="history-detail">{historyRun ? <RunDetail compact run={historyRun} onOpenExport={reveal => openExport(historyRun, reveal)} entries={entries} pending={pending} busyRun={busyRun} onRecover={() => recoverRun(historyRun)} onCopy={() => copyContext(null, historyRun)} /> : <div className="history-empty"><Icon name="history" size={42} /><p>每一次运行，都有记录</p></div>}</section></div>}
+      {page === 'run' && <div className="run-page">{active ? <RunDetail run={active} annotationMode={data.annotationMode} onAnnotate={() => act('annotate', () => api.annotate())} onCopyAnnotation={annotation => act('copy-annotation', () => api.copyAnnotation({ runId: active.id, annotationId: annotation.id }), '已复制批注，可粘贴给智能体。')} onShowEmbedded={data.embedded?.active ? () => act('embedded-show', () => api.showEmbedded(true)) : undefined} entries={entries} onCopy={() => copyContext(null, active)} pending={pending} busyRun={busyRun} onRecover={() => recoverRun(active)} control={command => act(command, () => api.control(command))} onOpenExport={reveal => openExport(active, reveal)} onHistory={() => { setSelectedRun(active.id); setPage('history'); }} onReplay={() => act('replay', async () => { await api.play({ workspaceId: active.workspaceId, entryId: active.entryId, kind: active.kind, profileId: active.profileId, browser: browserChoice || undefined }); setData(await api.getState()); })} /> : <Empty icon="play" title="准备好，就开始播放">从项目选择一个 Book、Section 或脚本，按既定步骤执行。</Empty>}{!active && <div className="empty-action"><Button className="primary" icon="library" onClick={() => setPage('library')}>前往项目</Button></div>}</div>}
+      {page === 'history' && <div className="history-split"><section className="history-list">{runs.map(run => <button className={`history-card ${historyRun?.id === run.id ? 'selected' : ''}`} key={run.id} onClick={() => setSelectedRun(run.id)} aria-label={`查看运行记录 ${run.title}`}><div className={`run-result-icon ${run.state}`}><Icon name={run.state === 'completed' ? 'check' : run.state === 'failed' ? 'info' : ACTIVE.includes(run.state) ? 'play' : 'stop'} size={18} /></div><div><h3>{run.title}</h3><p>{date(run.startedAt)}<span>·</span>{run.profileName || '默认运行方式'}</p><Status state={run.state} /></div><Icon name="arrow" className="card-chevron" size={16} /></button>)}{!runs.length && <Empty icon="history" title="还没有运行记录">完成一次播放后，结果和反馈会保存在这里。</Empty>}</section><section className="history-detail">{historyRun ? <RunDetail compact run={historyRun} onCopyAnnotation={annotation => act('copy-annotation', () => api.copyAnnotation({ runId: historyRun.id, annotationId: annotation.id }), '已复制批注，可粘贴给智能体。')} onOpenExport={reveal => openExport(historyRun, reveal)} entries={entries} pending={pending} busyRun={busyRun} onRecover={() => recoverRun(historyRun)} onCopy={() => copyContext(null, historyRun)} /> : <div className="history-empty"><Icon name="history" size={42} /><p>每一次运行，都有记录</p></div>}</section></div>}
       {page === 'skills' && <SkillPage key={data.tutorialLiveSkill ? 'live-skill' : 'practice-skill'} api={api} data={data} onRefresh={async () => setData(await api.getState())} notify={setNotice} />}
       </>}
     </main>
@@ -281,6 +282,7 @@ function RemovalDialog({ target, pending, blocked, error, onCancel, onConfirm })
 }
 
 function BrowserChoice({ value, onChange, disabled }) {
+  if (window.playbookDsh) return <span className="browser-choice" aria-label="播放位置">DSH 页签内播放</span>;
   return <select className="browser-choice" aria-label="播放位置" value={value || ''} onChange={event => onChange(event.target.value)} disabled={disabled}><option value="">自动 · 按脚本设置</option><option value="embedded">内置浏览器</option><option value="external">外部浏览器</option></select>;
 }
 
@@ -294,7 +296,7 @@ function InteractionPrompt({ interaction = {}, compact = false }) {
   return <div className={'interaction-prompt' + (compact ? ' compact' : '')} role="status"><strong>交给你操作</strong><p>{interaction.prompt || '你可以先操作当前页面，再继续演示。'}</p><small>{interaction.busy ? '正在选择文件或安装，请等待操作结束后再继续' : timing}</small></div>;
 }
 
-function EmbeddedPlayer({ run, active, pending, error, onBack, control }) {
+function EmbeddedPlayer({ run, active, pending, error, onBack, control, onAnnotate, annotationMode }) {
   const waiting = run?.state === 'waiting';
   const paused = ['paused', 'pausing'].includes(run?.state);
   const releasing = ['cleaning', 'recovering'].includes(run?.state);
@@ -306,10 +308,43 @@ function EmbeddedPlayer({ run, active, pending, error, onBack, control }) {
       <button className="embedded-back" onClick={onBack} disabled={!!pending} aria-label="返回项目"><Icon name="arrow" size={14} />返回项目</button>
       <div className="embedded-heading"><small>{run?.title || '内置演示'} · {run?.completed || 0} / {run?.total || 0}</small><strong>{waiting ? '交给你操作' : RUN_LABELS[run?.state] || '内置播放'}</strong></div>
       <div className="embedded-caption" aria-live="polite"><p title={caption}>{caption}</p>{waiting && <small>{run.interaction?.busy ? '正在选择文件或安装，请等待操作结束' : run.interaction?.remainingMs == null ? '完成后请点继续播放' : run.interaction?.paused ? '倒计时已暂停' : Math.ceil(Math.max(0, run.interaction.remainingMs) / 1000) + ' 秒后继续'}</small>}</div>
-      <div className="embedded-controls"><Button className="primary" icon={waiting || paused ? 'play' : 'pause'} onClick={() => control(waiting || paused ? 'resume' : 'pause')} disabled={!!pending || !canControl || (waiting && run.interaction?.busy)}>{waiting || paused ? '继续播放' : '暂停播放'}</Button>{waiting && run.interaction?.remainingMs != null && <Button icon="pause" onClick={() => control('pause')} disabled={!!pending || run.interaction?.paused}>{run.interaction?.paused ? '倒计时已暂停' : '暂停倒计时'}</Button>}<Button icon="stop" onClick={() => control('stop')} disabled={!!pending || !run || !ACTIVE.includes(run.state) || run.state === 'stopping' || run.stopRequested}>{run?.stopRequested ? '已请求停止' : releasing ? '请求停止' : '停止'}</Button></div>
+      <div className="embedded-controls"><Button className="primary" icon={waiting || paused ? 'play' : 'pause'} onClick={() => control(waiting || paused ? 'resume' : 'pause')} disabled={!!pending || !canControl || (waiting && run.interaction?.busy)}>{waiting || paused ? '继续播放' : '暂停播放'}</Button>{run?.state === 'paused' && <Button icon="annotation" onClick={onAnnotate} disabled={!!pending}>{annotationMode ? '退出批注' : '添加批注'}</Button>}{waiting && run.interaction?.remainingMs != null && <Button icon="pause" onClick={() => control('pause')} disabled={!!pending || run.interaction?.paused}>{run.interaction?.paused ? '倒计时已暂停' : '暂停倒计时'}</Button>}<Button icon="stop" onClick={() => control('stop')} disabled={!!pending || !run || !ACTIVE.includes(run.state) || run.state === 'stopping' || run.stopRequested}>{run?.stopRequested ? '已请求停止' : releasing ? '请求停止' : '停止'}</Button></div>
     </header>
-    <div className="embedded-page-space">{!active && <div className="embedded-finished"><Icon name="book" size={36} /><h2>{run?.state === 'completed' ? '演示已完成' : '内置页面已关闭'}</h2><p>返回项目查看运行结果或开始下一次播放。</p><Button onClick={onBack}>返回项目</Button></div>}</div>
+    <div className="embedded-page-space">{window.playbookDsh && active && <BrowserStream interactive={waiting || paused} />}{!active && <div className="embedded-finished"><Icon name="book" size={36} /><h2>{run?.state === 'completed' ? '演示已完成' : '内置页面已关闭'}</h2><p>返回项目查看运行结果或开始下一次播放。</p><Button onClick={onBack}>返回项目</Button></div>}</div>
   </main>;
+}
+
+function BrowserStream({ interactive }) {
+  const [frameUrl, setFrameUrl] = useState('');
+  const lastMove = useRef(0);
+  useEffect(() => {
+    let mounted = true;
+    const update = () => { if (mounted) setFrameUrl(window.playbookDsh.frameUrl()); };
+    update();
+    const timer = setInterval(update, 180);
+    return () => { mounted = false; clearInterval(timer); };
+  }, []);
+  const point = event => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(1440, (event.clientX - box.left) / box.width * 1440)), y: Math.max(0, Math.min(900, (event.clientY - box.top) / box.height * 900)) };
+  };
+  const send = value => { void window.playbookDsh.input(value).catch(() => {}); };
+  const pointer = (type, event) => {
+    if (!interactive) return;
+    if (type === 'move' && Date.now() - lastMove.current < 45) return;
+    if (type === 'move') lastMove.current = Date.now();
+    if (type === 'down') event.currentTarget.focus();
+    send({ type, ...point(event), button: ['left', 'middle', 'right'][event.button] || 'left' });
+  };
+  const key = event => {
+    if (!interactive || event.isComposing) return;
+    const named = { ' ': 'Space', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight', ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown' };
+    if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) send({ type: 'text', text: event.key });
+    else if (/^(Enter|Tab|Escape|Backspace|Delete|Home|End|PageUp|PageDown|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$/.test(event.key)) send({ type: 'key', key: named[event.key] || event.key });
+    else return;
+    event.preventDefault();
+  };
+  return <div className="dsh-browser-stage"><div className="dsh-browser-screen" tabIndex={interactive ? 0 : -1} role="application" aria-label="Playbook 受控页面" onPointerMove={event => pointer('move', event)} onPointerDown={event => pointer('down', event)} onPointerUp={event => pointer('up', event)} onWheel={event => interactive && send({ type: 'wheel', ...point(event), deltaX: event.deltaX, deltaY: event.deltaY })} onKeyDown={key} onCompositionEnd={event => interactive && send({ type: 'text', text: event.data })} onContextMenu={event => event.preventDefault()}><img src={frameUrl} draggable="false" alt="演示页面实时画面" /></div>{interactive && <div className="dsh-browser-hint">可在画面中操作当前页面</div>}</div>;
 }
 
 function ExportButton({ label, ...props }) {
@@ -378,7 +413,7 @@ function EntryDetail({ item, profile, setProfile, browserChoice, setBrowserChoic
     <div className="detail-footer"><Button className="quiet" icon="copy" onClick={onCopy} disabled={!!pending}>复制给智能体的修改上下文</Button></div></>;
 }
 
-function RunDetail({ run, entries, onCopy, pending, control, compact, onHistory, onReplay, onOpenExport, onRecover, busyRun, onShowEmbedded }) {
+function RunDetail({ run, entries, onCopy, pending, control, compact, onHistory, onReplay, onOpenExport, onRecover, busyRun, onShowEmbedded, onAnnotate, annotationMode, onCopyAnnotation }) {
   const item = entries.find(item => item.workspace.id === run.workspaceId && item.entryId === run.entryId && item.kind === run.kind);
   const legacyWorkspace = entries.find(item => item.workspace.id === run.workspaceId)?.workspace;
   const legacyDemo = run.kind === 'demo' ? legacyWorkspace?.demos?.find(demo => demo.id === run.entryId) : null;
@@ -390,12 +425,13 @@ function RunDetail({ run, entries, onCopy, pending, control, compact, onHistory,
   const executionError = run.executionError || ((!run.executionStatus || run.executionStatus === 'unknown') ? run.error : null);
   const summary = run.state === 'waiting' ? '交给你操作，自动演示正在等待' : releasing ? run.state === 'recovering' ? '正在恢复资源释放，结束后保存回执' : '正在释放资源，结束后保存回执' : run.state === 'completed' ? run.exported ? 'PPTX 已导出' : '全部步骤已完成' : run.state === 'failed' ? '本次播放未完成' : run.state === 'stopping' ? '已请求停止，等待执行结束和资源释放' : run.state === 'stopped' ? '后续操作已停止，资源回执见下方' : run.stepTitle || (run.state === 'preparing' ? '正在准备运行环境' : '等待下一步');
   return <div className={`run-detail ${compact ? 'compact' : ''}`}><div className="run-title-row"><div><span className="entry-kind"><Icon name={run.kind === 'book' ? 'book' : run.kind === 'section' ? 'library' : 'script'} size={15} />{run.mode === 'pptx' ? 'PPTX 导出' : run.kind === 'book' ? 'Book 播放' : run.kind === 'section' ? 'Section 播放' : run.kind === 'demo' ? '批量播放' : '脚本播放'}</span><h2>{run.title}</h2><p>{item?.workspace.name || '项目'}<span>·</span>{run.profileName || '默认运行方式'}</p></div><Status state={run.state} /></div>
-    <div className="run-progress"><div><strong>{summary}</strong><span>{count} / {total} 步</span></div><div className="progress-track" role="progressbar" aria-label="播放进度" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${percent}%` }} /></div>{!compact && control && <div className="run-controls">{run.state === 'waiting' ? <><Button icon="play" className="primary" onClick={() => control('resume')} disabled={!!pending || run.interaction?.busy}>继续播放</Button>{run.interaction?.remainingMs != null && <Button icon="pause" onClick={() => control('pause')} disabled={!!pending || run.interaction?.paused}>{run.interaction?.paused ? '倒计时已暂停' : '暂停倒计时'}</Button>}</> : run.state === 'paused' ? <Button icon="play" className="primary" onClick={() => control('resume')} disabled={!!pending}>继续播放</Button> : <Button icon="pause" className="primary" onClick={() => control('pause')} disabled={!!pending || run.state !== 'playing'}>{run.state === 'pausing' ? '正在暂停…' : '暂停播放'}</Button>}<Button icon="stop" onClick={() => control('stop')} disabled={!!pending || !ACTIVE.includes(run.state) || run.state === 'stopping' || run.stopRequested}>{run.stopRequested || run.state === 'stopping' ? '已请求停止' : releasing ? '请求停止播放' : '停止播放'}</Button>{onShowEmbedded && <Button icon="book" onClick={onShowEmbedded} disabled={!!pending}>查看内置演示</Button>}{!ACTIVE.includes(run.state) && onReplay && <Button icon="play" onClick={onReplay} disabled={!!pending || busyRun}>从头再播</Button>}{!ACTIVE.includes(run.state) && <Button className="quiet" icon="history" onClick={onHistory}>查看运行记录</Button>}</div>}</div>
+    <div className="run-progress"><div><strong>{summary}</strong><span>{count} / {total} 步</span></div><div className="progress-track" role="progressbar" aria-label="播放进度" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${percent}%` }} /></div>{!compact && control && <div className="run-controls">{run.state === 'waiting' ? <><Button icon="play" className="primary" onClick={() => control('resume')} disabled={!!pending || run.interaction?.busy}>继续播放</Button>{run.interaction?.remainingMs != null && <Button icon="pause" onClick={() => control('pause')} disabled={!!pending || run.interaction?.paused}>{run.interaction?.paused ? '倒计时已暂停' : '暂停倒计时'}</Button>}</> : run.state === 'paused' ? <Button icon="play" className="primary" onClick={() => control('resume')} disabled={!!pending}>继续播放</Button> : <Button icon="pause" className="primary" onClick={() => control('pause')} disabled={!!pending || run.state !== 'playing'}>{run.state === 'pausing' ? '正在暂停…' : '暂停播放'}</Button>}{run.state === 'paused' && onAnnotate && <Button icon="annotation" onClick={onAnnotate} disabled={!!pending}>{annotationMode ? '退出批注' : '添加批注'}</Button>}<Button icon="stop" onClick={() => control('stop')} disabled={!!pending || !ACTIVE.includes(run.state) || run.state === 'stopping' || run.stopRequested}>{run.stopRequested || run.state === 'stopping' ? '已请求停止' : releasing ? '请求停止播放' : '停止播放'}</Button>{onShowEmbedded && <Button icon="book" onClick={onShowEmbedded} disabled={!!pending}>查看内置演示</Button>}{!ACTIVE.includes(run.state) && onReplay && <Button icon="play" onClick={onReplay} disabled={!!pending || busyRun}>从头再播</Button>}{!ACTIVE.includes(run.state) && <Button className="quiet" icon="history" onClick={onHistory}>查看运行记录</Button>}</div>}</div>
     {run.state === 'waiting' && <InteractionPrompt interaction={run.interaction} />}
     {run.exported?.path && run.state === 'completed' && <div className="export-result" role="status"><div><strong>PPTX 已保存 · {run.exported.slides} 页</strong><p>{Math.round(run.exported.durationMs / 1000)} 秒 · {run.exported.audioSlides} 页语音 · 含演讲者备注</p><small>{run.exported.path}</small></div><div className="export-actions"><Button icon="external" onClick={() => onOpenExport(false)} disabled={!!pending}>打开 PPTX</Button><Button icon="folder" onClick={() => onOpenExport(true)} disabled={!!pending}>在文件夹中显示</Button></div></div>}
     {run.sourceChanged && <div className="run-callout"><Icon name="info" size={18} /><p>源文件已更新，本次继续使用启动时的内容。更改将在下一次播放生效。</p></div>}
     {executionError && <RunError title="执行遇到问题" error={executionError} />}
     <CleanupStatus run={run} pending={pending} busyRun={busyRun} onRecover={onRecover} />
+    {!!run.annotations?.length && <section className="run-annotations"><div className="section-label"><h3>页面批注</h3><span>{run.annotations.length} 条</span></div><ol>{run.annotations.map(annotation => <li key={annotation.id}><div><strong>{annotation.playbook?.stepTitle || `第 ${annotation.playbook?.index || '?'} 步`}</strong><p>{annotation.body}</p><small>{annotation.page?.title || annotation.page?.url} · {annotation.element?.selector}</small></div><Button icon="copy" onClick={() => onCopyAnnotation?.(annotation)} disabled={!!pending || !onCopyAnnotation}>复制给智能体</Button></li>)}</ol></section>}
     {run.recoveryError && <RunError title="恢复释放遇到问题" error={run.recoveryError} />}
     {run.lateErrors?.length > 0 && <RunError title="退出后收到的错误" error={run.lateErrors.join('\n')} />}
     <div className="run-meta"><div><span>开始时间</span><strong>{date(run.startedAt, true)}</strong></div><div><span>{run.finishedAt ? '运行耗时' : '运行状态'}</span><strong>{run.finishedAt ? duration(run) : RUN_LABELS[run.state]}</strong></div>{run.finishedAt && <div><span>结束时间</span><strong>{date(run.finishedAt, true)}</strong></div>}</div>
@@ -463,6 +499,10 @@ function SkillPage({ api, data, onRefresh, notify }) {
     setInstalling(true); setError(''); setReceipt(null);
     try {
       const result = await api.skillInstall({ ...params, replace: preview.status === 'update' || (needsReplace && replace) });
+      if (result?.practiceOnly) {
+        notify({ type: 'success', text: '练习预览已完成，没有写入文件。请返回 Playbook 主界面安装 Skill。' });
+        return;
+      }
       setReceipt(result); await onRefresh(); await refreshPreview();
       notify({ type: 'success', text: 'Skill 文件已安装并校验。请在智能体中重新加载或开启新会话验证。' });
     } catch (error) { await refreshPreview(); setError(error?.message || String(error)); }

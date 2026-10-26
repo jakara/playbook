@@ -207,7 +207,9 @@ test('a destination appearing during app installation is preserved without nesti
   await execute('/usr/bin/ditto', ['-c', '-k', '--keepParent', app, path.join(f.assets, 'Playbook-macos-arm64.zip')]);
   await checksum(f, ['playbook-skills.tar.gz', 'Playbook-macos-arm64.zip']);
   const script = await fs.readFile(f.script, 'utf8');
-  await fs.writeFile(f.script, script.replace('/bin/mv -n ', '/bin/mkdir -p "$APP_DIR/Playbook.app"\n/bin/echo user-owned > "$APP_DIR/Playbook.app/user-marker"\n/bin/mv -n '));
+  const appMove = '/bin/mv -n "$APP_STAGE/Playbook.app" "$APP_DIR/"';
+  assert.ok(script.includes(appMove));
+  await fs.writeFile(f.script, script.replace(appMove, '/bin/mkdir -p "$APP_DIR/Playbook.app"\n/bin/echo user-owned > "$APP_DIR/Playbook.app/user-marker"\n' + appMove));
   const result = await run('/bin/bash', [f.script, '--ensure-app', '--app-dir', appDir], f.env);
   assert.equal(result.code, 1);
   assert.equal(await fs.readFile(path.join(appDir, 'Playbook.app/user-marker'), 'utf8'), 'user-owned\n');

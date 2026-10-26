@@ -5,11 +5,12 @@ import { homedir } from 'node:os';
 import { createBrowserSession, reconcileBrowserSessions, destroyBrowserSession } from './browser-sessions.mjs';
 import { createEmbeddedBrowser } from './embedded-browser.mjs';
 import { randomUUID, createHash } from 'node:crypto';
-import { readWorkspace, inside, selection, snapshot, removeBookFromManifest } from './library.mjs';
+import { readWorkspace, inside, selection, snapshot, removeBookFromManifest, saveStepText } from './library.mjs';
 import { FRAMEWORKS, SKILL_NAMES, targetFor, inspectSkillBundle, installSkillBundle } from './skill-installer.mjs';
 import { createPlaybackControl } from './playback-control.mjs';
 import { commitPptx } from './pptx.mjs';
 import { atomicJSON, safeError, terminal, cleanupSummary, settledCleanup, interrupted, recoveryHandle } from './lifecycle.mjs';
+import { createAnnotation, formatAnnotation } from './annotation-format.mjs';
 
 app.setName('Playbook');
 const browserSession = createBrowserSession();
@@ -30,11 +31,11 @@ const builtinKeys = new Map([[tutorial, 'tutorial'], [starter, 'starter']]);
 const builtinKey = directory => builtinKeys.get(directory);
 const dataDir = app.getPath('userData');
 const skillDir = path.join(appRoot, 'skills/playbook-wright');
-const skillVersion = '0.10.1';
+const skillVersion = app.getVersion();
 const skillProjects = new Set();
 let window, settings = { schemaVersion: 1, roots: [] }, workspaces = [], runs = [], activeRun = null;
 let worker = null, launchBusy = false, quitting = false, refreshTask = null;
-let playbackControl, playbackSelection, controlIntent, embeddedBrowser;
+let playbackControl, playbackSelection, controlIntent, embeddedBrowser, annotationMode = false;
 const tutorialActions = new Set();
 let manualWindow = false;
 let runtimeWarnings = [];
@@ -49,7 +50,7 @@ const reviewNeeded = run => terminal(run.state) && run.cleanup && !settledCleanu
 const recoveryAvailable = run => run.cleanupScopes?.some(scope => !settledCleanup(scope.status)) && run.cleanupScopes.filter(scope => !settledCleanup(scope.status)).every(scope => scope.recoveryVersion && scope.entries.length && scope.entries.every(entry => settledCleanup(entry.status) || Object.hasOwn(entry, 'handle')));
 
 function viewState() {
-  return { runtimeWarnings, embedded: embeddedBrowser?.state() || { active: false, visible: false }, appVersion: app.getVersion(), workspaces: workspaces.map(workspace => ({ ...workspace, builtin: builtins.includes(workspace.path), profiles: workspace.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
+  return { runtimeWarnings, annotationMode, embedded: embeddedBrowser?.state() || { active: false, visible: false }, appVersion: app.getVersion(), workspaces: workspaces.map(workspace => ({ ...workspace, builtin: builtins.includes(workspace.path), profiles: workspace.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
     runs: [...runs.filter(reviewNeeded), ...runs.filter(run => !reviewNeeded(run)).slice(0, 100)].map(run => ({ ...run, canRecover: Boolean(recoveryAvailable(run)) })), activeRun: activeRun ? { ...activeRun, canRecover: Boolean(recoveryAvailable(activeRun)) } : null, playbackShortcut: shortcut, playbackControl: playbackControl?.state(), skill: { name: SKILL_NAMES[0], compatibilityName: SKILL_NAMES[1], version: skillVersion, frameworks: FRAMEWORKS.map(({ id, name }) => ({ id, name })) } };
 }
 function publish() { if (window && !window.isDestroyed()) window.webContents.send('playbook:state', viewState()); playbackControl?.publish(); }
@@ -155,6 +156,30 @@ function attachWorker(child, intent, { outputDir, pptxDestination, recovering = 
           await record({ ...(!terminal(activeRun.state) ? { state: intent.stopped ? 'stopping' : 'playing' } : {}), interaction: null, manualInteractions: [...(activeRun.manualInteractions || []), { flowId: message.flowId, stepId: message.stepId, ...message.result, finishedAt: new Date().toISOString() }] }); acknowledge(); return;
         }
         if (message.type === 'execution-error') { await record({ executionError: safeError(message.error), executionStatus: 'failed' }); acknowledge(); return; }
+        if (message.type === 'annotation-mode') { annotationMode = Boolean(message.active) && activeRun.state === 'paused'; publish(); return; }
+        if (message.type === 'annotation-save') {
+          if (worker !== child || activeRun.state !== 'paused' || !intent.paused || !annotationMode || activeRun.mode === 'pptx') throw new Error('仅能在当前演示暂停批注时保存');
+          if (message.stepId !== activeRun.stepId || message.flowId !== activeRun.flowId) throw new Error('批注步骤已变化，请重新选择元素');
+          const annotation = createAnnotation(message.annotation, activeRun);
+          await record({ annotations: [...(activeRun.annotations || []), annotation] });
+          acknowledge(null, { annotation, prompt: formatAnnotation(annotation) }); return;
+        }
+        if (message.type === 'step-text-save') {
+          if (worker !== child || activeRun.state !== 'paused' || !intent.paused || intent.stopped || activeRun.mode !== 'play') throw new Error('仅能在当前演示暂停时编辑文字');
+          if (message.stepId !== activeRun.stepId || message.flowId !== activeRun.flowId) throw new Error('当前步骤已变化，请重新暂停后编辑');
+          const source = activeRun.scriptSources?.find(item => item.id === message.flowId);
+          if (!source) throw new Error('当前脚本源文件不存在');
+          const saved = await saveStepText({ workspaceDir: activeRun.workspacePath, file: source.file, expectedHash: source.hash,
+            flowId: message.flowId, stepId: message.stepId, title: message.title, explain: message.explain,
+            backupDir: path.join(dataDir, 'backups', 'step-text') });
+          source.hash = saved.hash;
+          const step = activeRun.steps.find(item => item.flowId === message.flowId && item.id === message.stepId);
+          if (step) { step.title = message.title; step.explain = message.explain; }
+          await record({ stepTitle: message.title, sourceChanged: true, textEdits: [...(activeRun.textEdits || []),
+            { flowId: message.flowId, stepId: message.stepId, savedAt: new Date().toISOString(), backupPath: saved.backupPath }] });
+          await refresh();
+          acknowledge(null, { title: message.title, explain: message.explain }); return;
+        }
         if (message.type === 'limits') { await record({ lifecycle: message.limits }); acknowledge(); return; }
         if (message.type === 'scope') {
           const scope = structuredClone(message.scope);
@@ -210,6 +235,7 @@ function attachWorker(child, intent, { outputDir, pptxDestination, recovering = 
   });
   child.on('exit', code => {
     if (worker === child) worker = null;
+    annotationMode = false; publish();
     void messages.then(async () => {
       if (activeRun?.id === runId && !terminal(activeRun.state)) await record(interrupted(activeRun, `运行器已退出（${code}），清理结果未知`));
       if (activeRun?.id === runId && activeRun.state !== 'completed') embeddedBrowser?.show(false);
@@ -289,7 +315,8 @@ async function play({ workspaceId, entryId, kind = 'script', profileId, browser:
     activeRun = { id: randomUUID(), title: selected.title, workspaceId, entryId, kind, profileId: selected.profile.id, mode: pptxDestination ? 'pptx' : 'play', browser: playbackBrowser,
       profileName: selected.profile.title, lifecycleVersion: 1, workspacePath: workspace.path, profileFile: selected.profile.file, appVersion: app.getVersion(), cleanup: { status: 'not-required', errors: [] }, cleanupScopes: [], state: 'preparing', total: selected.items.reduce((sum, item) => sum + item.steps.length, 0),
       index: 0, completed: 0, startedAt: new Date().toISOString(), sourceToken: workspace.token, sourceChanged: false, flowIds: selected.items.map(item => item.id),
-      steps: selected.items.flatMap(item => item.steps.map(step => ({ ...step, flowId: item.id, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle }))) };
+      steps: selected.items.flatMap(item => item.steps.map(step => ({ ...step, flowId: item.id, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle }))),
+      scriptSources: selected.items.map(item => ({ id: item.id, file: item.file, hash: item.hash })) };
     const intent = { runId: activeRun.id, paused: false, stopped: false, ready: false };
     controlIntent = intent;
     await record({});
@@ -407,6 +434,7 @@ async function control(command) {
   const intent = controlIntent?.runId === activeRun.id ? controlIntent : (controlIntent = { runId: activeRun.id, paused: false, stopped: false, ready: Boolean(worker) });
   if (command === 'pause' || command === 'resume') {
     if (activeRun.interaction?.busy && command === 'resume') return;
+    if (command === 'resume' && annotationMode) { annotationMode = false; worker?.postMessage({ command: 'annotation-cancel' }); publish(); }
     const manual = activeRun.state === 'waiting';
     intent.paused = command === 'pause';
     if (intent.ready && worker) worker.postMessage({ command });
@@ -416,11 +444,20 @@ async function control(command) {
     return;
   }
   if (command === 'stop') {
+    if (annotationMode) { annotationMode = false; worker?.postMessage({ command: 'annotation-cancel' }); publish(); }
     intent.stopped = true; intent.paused = false; intent.stopRequestedAt ||= new Date().toISOString(); intent.stopDeadline ||= Date.now() + (activeRun.lifecycle?.stopTimeoutMs || 30000);
     if (intent.ready && worker) worker.postMessage({ command });
     await record({ state: activeRun.cleanup?.status === 'running' ? 'cleaning' : 'stopping', stopRequested: true, stopRequestedAt: intent.stopRequestedAt });
     if (activeRun.cleanup?.status !== 'running') guardRun(Math.max(1, intent.stopDeadline - Date.now()), '停止宽限耗尽，业务执行和资源释放结果未知');
   }
+}
+
+function toggleAnnotation() {
+  if (!activeRun || activeRun.state !== 'paused' || activeRun.mode === 'pptx' || !worker || !controlIntent?.paused) throw new Error('请先暂停正在播放的演示');
+  annotationMode = !annotationMode;
+  worker.postMessage({ command: annotationMode ? 'annotation-start' : 'annotation-cancel' });
+  publish();
+  return { active: annotationMode };
 }
 
 app.whenReady().then(async () => {
@@ -456,7 +493,7 @@ app.whenReady().then(async () => {
   window.on('closed', () => { window = null; });
   window.webContents.on('render-process-gone', () => { void shutdown(); });
   embeddedBrowser = createEmbeddedBrowser({ window, appRoot, dataDir, sessionDir: browserSessionDir, onChange: publish, onCrash: () => { void control('stop'); } });
-  playbackControl = createPlaybackControl({ appRoot, getRun: () => activeRun, shortcut, onVisibilityChange: publish, isEmbeddedVisible: () => embeddedBrowser?.state().visible });
+  playbackControl = createPlaybackControl({ appRoot, getRun: () => activeRun, getAnnotationMode: () => annotationMode, shortcut, onVisibilityChange: publish, isEmbeddedVisible: () => embeddedBrowser?.state().visible });
   shortcut.registered = globalShortcut.register(shortcut.accelerator, () => {
     playbackControl.pulse();
     void control('toggle').catch(error => { shortcut.error = safeError(error); publish(); window?.show(); });
@@ -466,6 +503,14 @@ app.whenReady().then(async () => {
   handle('getState', () => viewState());
   handle('playbackState', () => playbackControl.state(), true);
   handle('collapseControl', value => playbackControl.setCollapsed(value), true);
+  handle('annotate', toggleAnnotation, true);
+  handle('copyAnnotation', ({ runId, annotationId }) => {
+    const run = runs.find(item => item.id === runId);
+    const annotation = run?.annotations?.find(item => item.id === annotationId);
+    if (!annotation) throw new Error('批注不存在');
+    clipboard.writeText(formatAnnotation(annotation));
+    return { copied: true };
+  });
   handle('addWorkspace', async () => {
     const result = await dialog.showOpenDialog(window, { title: '选择包含 .playbook.json 的业务项目', properties: ['openDirectory'] });
     if (!result.canceled) {

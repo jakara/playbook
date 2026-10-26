@@ -22,6 +22,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 - 页面区域遮盖/模糊、本机语音与本地录音、同步播放控制。
 - 可选内置浏览器，以及讲解后交还操作权、倒计时或手动继续的混合演示，见 [内置播放与手动操作](references/interaction.md)。
 - 客户端原生悬浮条的显隐、拖动、收起/展开、全局快捷键与恢复 Chrome。
+- 暂停后选择页面元素添加批注、显示页面图标，并复制含页面、元素及 Playbook 步骤上下文的提示词，见 [页面批注与复制格式](references/annotations.md)。
 - 只读浏览、搜索与从磁盘刷新、项目移出、经确认的 Book 清单删除（保留脚本与备份）、执行快照、运行反馈、TC 双向转换和 Skill 安装更新。
 - 停止、关窗/退出协调、独立清理预算、持久化回执与 Profile 可选崩溃恢复。
 - Book/Section/脚本回放导出 PPTX：页面截图、内嵌语音、按讲解换页与演讲者备注，见 [PPTX 导出](references/pptx-export.md)。
@@ -30,13 +31,14 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 - 从需求或手工操作生成脚本、需要补齐意图时，读 [需求引导与创作](references/authoring.md)。
 - 管理脚本、修改讲解/效果、编排或根据反馈修复时，读 [维护与呈现调整](references/maintenance.md)。
+- 收到 `playbook.annotation.v1` 批注时，读 [页面批注与复制格式](references/annotations.md)，核对当前代码和页面后修复。
 - 创建/修改 Profile、处理停止/关窗/崩溃、迁移资源清理时，读 [生命周期与恢复](references/lifecycle.md)，保留既有资源归属与清理策略。
 - 需要留在应用中播放、邀请观众实操或真实安装 Skill 时，读 [内置播放与手动操作](references/interaction.md)；手动步骤的 run 不由桌面自动执行，不能将等待结束当成业务完成。
 - TC 转脚本时，读 [TC → Playbook](references/tc-to-playbook.md)；转回测试时，读 [Playbook → TC](references/playbook-to-tc.md)。共享模式为默认，用户要求脱离 Playbook 时才独立导出。
 
 已有项目契约与本 Skill 不一致时识别差异，按实际 SDK 与播放器支持范围适配，不悄悄改写版本。沿实际 import 查阅 fixture、helpers、配置与 setup/teardown，不能只转换测试正文。
 
-当前安装页 Skill 版本为 **0.10.1**，适配客户端 v0.6 及以上；清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用；内置浏览器与手动交接需要 v0.6 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
+当前安装页 Skill 版本为 **0.11.0**，适配客户端 v0.6 及以上；页面批注需要 v0.8.0。清单、脚本与 Profile 的 `schemaVersion` 仍为 `1`，SDK 包版本另行核对。旧脚本可继续使用；内置浏览器与手动交接需要 v0.6 播放器。`@playbook/core` 提供 `definePlaybook`、`defineProfile` 与 `runPlaybook`；桌面打包器解析应用自带 SDK，不要求业务仓库从公共 npm 安装。独立类型检查或 TC 运行则需要实际可解析的本地 SDK/依赖，不能凭包名自动安装未知包。
 
 安装页可安装到 Codex 的用户级 `~/.agents/skills/playbook-wright` 或所选项目目录下的 `.agents/skills/playbook-wright`，以及 Claude Code 对应的 `~/.claude/skills/playbook-wright` 或 `.claude/skills/playbook-wright`。项目安装由用户在系统文件夹选择器中指定智能体打开的项目目录，不要求先登记到 Playbook 或存在 `.playbook.json`；目标追加框架固定的 Skill 子目录，不自动猜测或改为上级仓库。已有安装先预览状态，按安装页的确认与备份机制更新，软链接由用户自行管理。安装器同时写入主 Skill 与同级 `playbook-playwright` 兼容入口，逐一预览并保护两者的本地修改；更新旧安装先备份。若第二个入口失败，已完成的主入口保留，显示未完成并可重试；不宣称跨两个目录原子替换。安装成功只代表两个入口的文件核验通过，需在目标智能体重新加载或开启新会话，确认调用当前版本。
 

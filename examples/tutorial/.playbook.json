@@ -4,7 +4,7 @@
   "profiles": [
     {
       "id": "playbook-tutorial",
-      "title": "内置教程 · Skill 可手动真实安装",
+      "title": "独立练习 · Skill 安装依客户端能力",
       "file": "profiles/desktop.profile.ts",
       "dataMode": "fixture",
       "parameters": {}
@@ -51,7 +51,7 @@
     {
       "id": "playbook-tutorial",
       "title": "Playbook 使用教程",
-      "summary": "跟着自动操作学习项目、Book 与 Section、播放控制、PPTX 和 Skill。带语音讲解，在客户端内播放；Skill 安装处可暂停并亲自安装。",
+      "summary": "跟着自动操作学习项目、Book 与 Section、播放控制、PPTX 和 Skill。带语音讲解；支持真实 Skill 安装的客户端可在交接步骤亲自安装。",
       "profile": "playbook-tutorial",
       "sections": [
         {

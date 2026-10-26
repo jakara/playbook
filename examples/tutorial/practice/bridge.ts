@@ -85,7 +85,7 @@ export const practiceBridge = String.raw`
       return { ...target('playbook-wright'), version:state.skill.version, fileCount:state.skill.fileCount,
         message:'练习预览：这里的路径与安装状态为示例，未读写你的电脑。', targets:[target('playbook-wright'),target('playbook-playwright')] };
     },
-    async skillInstall(input) { if (state.tutorialLiveSkill && window.playbookTutorial) return window.playbookTutorial.skillInstall(input); return noWrite(); }, reveal:noWrite, openExport:noWrite, recoverRun:noWrite,
+    async skillInstall(input) { if (state.tutorialLiveSkill && window.playbookTutorial) return window.playbookTutorial.skillInstall(input); note('skill-install-practice'); return { practiceOnly: true }; }, reveal:noWrite, openExport:noWrite, recoverRun:noWrite,
     async exportPptx() { note('export-preview-cancel'); return {canceled:true}; }
   });
 })();

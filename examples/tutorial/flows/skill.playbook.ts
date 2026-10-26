@@ -33,9 +33,9 @@ export default definePlaybook({
       narration:{text:'先核对路径和版本。稍后可以亲自选择与安装。'},
       target:({page})=>page.locator('.install-preview').first(),
       run:async()=>{},verify:async({page})=>{await expect(page.locator('.target-path').first()).toHaveText('/练习/我的演示项目/.agents/skills/playbook-wright');await expect(page.getByRole('button',{name:'安装 Skill',exact:true})).toBeEnabled();}},
-    {id:'install-now',title:'可选：现在安装 Skill',explain:'现在可以亲自选择智能体、安装位置并点击安装 Skill。内置模式会真实写入你选择的目录；打开选择器或安装期间暂停计时。也可直接继续，未操作时十秒后继续讲解。',
-      narration:{text:'现在可以选择位置并亲自安装 Skill。也可以继续观看，十秒后自动继续。'},
-      interaction:{mode:'manual',prompt:'现在可以真实安装 Skill：核对框架和目标位置后自行点击安装。操作中暂停计时；也可直接继续。',timeoutMs:10000,onTimeout:'continue'},
+    {id:'install-now',title:'可选：查看 Skill 安装',explain:'此处交还操作权，供你查看安装目标。只有客户端提供真实安装接口时，亲自点击安装才会写入所选目录；练习模式不会安装。也可直接继续，未操作时十秒后继续讲解。',
+      narration:{text:'现在可以查看安装目标。若客户端支持真实安装，可亲自确认；也可以继续观看。'},
+      interaction:{mode:'manual',prompt:'查看框架和目标位置。支持真实安装的客户端可由你亲自确认；练习模式不写入文件。也可直接继续。',timeoutMs:10000,onTimeout:'continue'},
       target:({page})=>page.getByRole('button',{name:'安装 Skill',exact:true}),
       run:async()=>{},
       verify:async({page})=>{

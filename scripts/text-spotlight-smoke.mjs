@@ -22,7 +22,7 @@ try {
   </style><p id="wide">生成服务尚未配置，可继续手工编写；已有内容已保留。</p>
   <p id="multi">候选正文包含多行实际文字。第一行需要聚光，第二行也需要聚光，直到主要正文都得到突出。</p>
   <details open><summary id="summary">评价历史：已完成本轮评价，可展开查看具体记录。</summary><p>实际记录</p></details>
-  <div id="spacer"></div><p id="after">滚动后仍应照亮这段真实文字。</p></html>`);
+  <div id="spacer"></div><p id="after">滚动后仍应照亮这段真实文字。</p><div style="height:900px"></div></html>`);
   await page.addStyleTag({ content: await readFile(path.join(root, 'node_modules/driver.js/dist/driver.css'), 'utf8') });
   await page.addStyleTag({ content: await readFile(path.join(root, 'desktop/presentation/guide.css'), 'utf8') });
   await page.addScriptTag({ content: await readFile(path.join(root, 'node_modules/driver.js/dist/driver.js.iife.js'), 'utf8') });
@@ -55,6 +55,7 @@ try {
   assert.ok(findings.summary.textLines[0].right < 800);
   await page.screenshot({ path: path.join(output, '04-summary.png') });
   await page.locator('#after').scrollIntoViewIfNeeded();
+  await page.locator('#after').evaluate(element => element.scrollIntoView({ block: 'center' }));
   await show('#after');
   findings.scrollStart = await inspect();
   await page.evaluate(() => scrollBy(0, -80)); await waitLayout();
@@ -62,14 +63,22 @@ try {
   assert.ok(Math.abs(findings.scrolled.textLines[0].top - findings.scrollStart.textLines[0].top) > 50);
   await page.screenshot({ path: path.join(output, '05-scroll.png') });
   await page.setViewportSize({ width: 720, height: 900 }); await waitLayout();
+  await page.locator('#after').evaluate(element => element.scrollIntoView({ block: 'center' })); await waitLayout();
   findings.resized = await inspect();
   assert.ok(findings.resized.textLines.length >= 1);
+  assert.ok(findings.resized.textLines[0].bottom < 850);
   await page.screenshot({ path: path.join(output, '06-resize.png') });
   await show('#multi');
   await page.locator('#multi').evaluate(element => { element.style.width = '230px'; element.scrollIntoView(); }); await waitLayout();
   findings.reflow = await inspect();
   assert.ok(findings.reflow.textLines.length >= 3);
   await page.screenshot({ path: path.join(output, '07-reflow.png') });
+  await page.evaluate(() => { document.body.style.zoom = '125%'; });
+  await page.locator('#multi').evaluate(element => element.scrollIntoView({ block: 'center' })); await waitLayout();
+  findings.zoomed = await inspect();
+  assert.ok(findings.zoomed.textLines.length >= 3);
+  assert.ok(findings.zoomed.textLines.every(line => line.top >= 0 && line.bottom <= 900));
+  await page.screenshot({ path: path.join(output, '08-zoom.png') });
   await page.locator('#multi').evaluate(element => { element.style.display = 'none'; }); await waitLayout();
   findings.hidden = await inspect();
   assert.equal(findings.hidden.textVisible, false);

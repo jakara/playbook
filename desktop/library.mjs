@@ -1,4 +1,4 @@
-import { readFile, realpath, stat, mkdir, writeFile, lstat } from 'node:fs/promises';
+import { readFile, realpath, stat, mkdir, writeFile, lstat, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { atomicJSON } from './lifecycle.mjs';
 import { randomUUID, createHash } from 'node:crypto';
@@ -63,6 +63,55 @@ export function metadata(source, filename) {
   return { id: value.id, title: value.title, summary: value.summary || '', source: value.source,
     playback: value.playback, presentation: value.presentation, narration: value.narration, redactions: value.redactions,
     requirements: req, steps: value.steps.map(({ id, title, explain, presentation, narration, interaction }) => ({ id, title, explain, presentation, narration, interaction })) };
+}
+
+export async function saveStepText({ workspaceDir, file, expectedHash, flowId, stepId, title, explain, backupDir }) {
+  if (![flowId, stepId, title, explain].every(value => typeof value === 'string')
+    || !title.trim() || !explain.trim() || title.length > 500 || explain.length > 5000
+    || !/^[a-f0-9]{64}$/.test(expectedHash || '')) throw new Error('步骤文字无效');
+  const root = await realpath(workspaceDir);
+  const filename = await inside(root, file);
+  if ((await lstat(path.resolve(root, file))).isSymbolicLink()) throw new Error('脚本为软链接，请在源文件中编辑');
+  const before = await readFile(filename);
+  if (hash(before) !== expectedHash) throw new Error('脚本已在磁盘上更新，请重新播放后编辑');
+  const source = before.toString('utf8');
+  const tree = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true);
+  const unwrap = node => node && (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) ? unwrap(node.expression) : node;
+  const exported = tree.statements.find(ts.isExportAssignment);
+  const expression = exported?.expression;
+  const exportedValue = unwrap(expression);
+  const object = unwrap(exportedValue && ts.isCallExpression(exportedValue) ? exportedValue.arguments[0] : exportedValue);
+  const property = (node, name) => node && ts.isObjectLiteralExpression(node) ? node.properties.find(item =>
+    ts.isPropertyAssignment(item) && !ts.isComputedPropertyName(item.name)
+    && (ts.isIdentifier(item.name) || ts.isStringLiteral(item.name)) && item.name.text === name) : undefined;
+  if (!object || !ts.isObjectLiteralExpression(object) || literal(property(object, 'id')?.initializer) !== flowId) throw new Error('脚本 ID 与当前播放内容不一致');
+  const steps = unwrap(property(object, 'steps')?.initializer);
+  if (!steps || !ts.isArrayLiteralExpression(steps)) throw new Error('步骤不是可编辑的静态数组');
+  const matches = steps.elements.map(unwrap).filter(item => literal(property(item, 'id')?.initializer) === stepId);
+  if (matches.length !== 1) throw new Error('步骤 ID 已变化或不唯一');
+  const changes = [['title', title], ['explain', explain]].map(([key, value]) => {
+    const node = unwrap(property(matches[0], key)?.initializer);
+    if (!node || !(ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))) throw new Error(`${key} 不是可编辑的静态文字`);
+    return { start: node.getStart(tree), end: node.getEnd(), value: JSON.stringify(value) };
+  });
+  let updated = source;
+  for (const change of changes.sort((a, b) => b.start - a.start)) updated = updated.slice(0, change.start) + change.value + updated.slice(change.end);
+  const parsed = metadata(updated, filename);
+  if (parsed.id !== flowId || parsed.steps.find(item => item.id === stepId)?.title !== title
+    || parsed.steps.find(item => item.id === stepId)?.explain !== explain) throw new Error('编辑后的脚本校验失败');
+  await mkdir(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, `step-text-${randomUUID()}.ts`);
+  await writeFile(backupPath, before, { flag: 'wx', mode: 0o600, flush: true });
+  if (!(await readFile(backupPath)).equals(before)) throw new Error('脚本备份核验失败');
+  if (!(await readFile(filename)).equals(before)) throw new Error('脚本已在磁盘上更新，请重新播放后编辑');
+  const temporary = path.join(path.dirname(filename), `.${path.basename(filename)}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, updated, { flag: 'wx', mode: (await stat(filename)).mode, flush: true });
+    if (!(await readFile(filename)).equals(before)) throw new Error('脚本已在磁盘上更新，请重新播放后编辑');
+    await rename(temporary, filename);
+  } finally { await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
+  if ((await readFile(filename, 'utf8')) !== updated) throw new Error(`脚本写入核验失败，请使用备份核对：${backupPath}`);
+  return { hash: hash(updated), backupPath };
 }
 
 function audioReferences(flow) {

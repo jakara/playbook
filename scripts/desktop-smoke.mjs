@@ -238,9 +238,12 @@ try {
   await expect(page.getByRole('button', { name: '已安装当前版本', exact: true })).toBeVisible();
   const installed = path.join(codexTarget, 'SKILL.md');
   const installedText = await readFile(installed, 'utf8');
-  assert.equal(installedText, await readFile(path.join(root, 'skills/playbook-wright/SKILL.md'), 'utf8')); checks.skillInstall = true;
+  const bundledSkills = process.env.PLAYBOOK_PACKAGED_EXECUTABLE
+    ? path.resolve(path.dirname(process.env.PLAYBOOK_PACKAGED_EXECUTABLE), '../Resources/app/skills')
+    : path.join(root, 'skills');
+  assert.equal(installedText, await readFile(path.join(bundledSkills, 'playbook-wright/SKILL.md'), 'utf8')); checks.skillInstall = true;
   const compatibility = path.join(installProject, '.agents/skills/playbook-playwright/SKILL.md');
-  assert.equal(await readFile(compatibility, 'utf8'), await readFile(path.join(root, 'skills/playbook-playwright/SKILL.md'), 'utf8'));
+  assert.equal(await readFile(compatibility, 'utf8'), await readFile(path.join(bundledSkills, 'playbook-playwright/SKILL.md'), 'utf8'));
   await expect(page.getByText(/兼容入口 \$playbook-playwright/)).toBeVisible(); checks.skillCompatibilityEntry = true;
   await writeFile(installed, installedText + '\n本地自定义内容\n');
   await page.getByRole('button', { name: '重新查看目标', exact: true }).click();

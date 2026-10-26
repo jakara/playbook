@@ -29,7 +29,7 @@ try {
    results.push(flow.id+':'+step.id);
   }
   if(flow.id==='tutorial.skill') {
-   await assert.rejects(page.evaluate(()=>window.playbook.skillInstall()),/独立练习/);
+   assert.deepEqual(await page.evaluate(()=>window.playbook.skillInstall()), { practiceOnly: true });
    await page.getByLabel('使用的框架',{exact:true}).selectOption('claude-code');
    await page.getByRole('button',{name:'重新查看目标',exact:true}).click();
    await page.getByText('/练习/我的演示项目/.claude/skills/playbook-wright',{exact:true}).waitFor();

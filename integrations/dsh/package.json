@@ -1,0 +1,26 @@
+{
+  "name": "playbook-dsh",
+  "version": "0.11.0",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar"] }
+  },
+  "files": ["index.js", "server.mjs", "bridge.js", "client.js", "cordis.patch.yml", "runtime/**", "README.md"],
+  "scripts": { "bundle:runtime": "node scripts/pack-runtime.mjs", "prepack": "npm run bundle:runtime" },
+  "dependencies": {
+    "@playwright/test": "1.58.2",
+    "driver.js": "1.10.2",
+    "esbuild": "0.28.2",
+    "jszip": "3.10.1",
+    "playwright": "1.58.2",
+    "pptxgenjs": "4.0.1",
+    "typescript": "5.9.3"
+  },
+  "engines": { "dsh": ">=0.2.1-rc.2 <0.3.0" }
+}

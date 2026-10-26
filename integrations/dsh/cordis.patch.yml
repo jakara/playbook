@@ -1,0 +1,3 @@
+- insert:
+    - id: playbook
+      name: playbook-dsh
