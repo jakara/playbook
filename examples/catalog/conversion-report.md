@@ -5,7 +5,7 @@
 - 来源：`original.spec.ts` 中 `search a course and preview its task`。
 - 正向产物：`catalog.playbook.ts`；共享测试入口：`shared.spec.ts`。
 - 反向产物：`exported.spec.ts`，标准 Playwright TC，不导入 Playbook。
-- 契约：schemaVersion 1，参考 SDK v0.1.0；Playwright 1.58.2。
+- 契约：schemaVersion 1，类型见 [SDK](../../src/index.ts)；Playwright 版本见 [package.json](../../package.json)。
 - 运行目标：合成 HTML 页面，dataMode 为 fixture；无身份认证和网络访问，无业务写入。每个测试重新挂载页面，可安全再次运行。
 
 ## 对应关系
@@ -22,4 +22,4 @@
 
 本仓库 `npm run check` 会编译契约和所有示例、检查执行顺序与失败传播，再运行三种入口的浏览器测试。`test:negative` 将 fixture 标题改成 Changed task，要求原始、共享与独立 TC 都因找不到预期 Poster brief 而失败。
 
-实际执行结果见 [验证记录](../../docs/verification.md)。这些结果只说明该合成场景保留了动作与断言；没有验证实际学校平台、登录、业务数据恢复、Driver.js 呈现或 Electron 打包。独立导出是快照，源流程修改后需要同步，不能同时作为第二份业务真源。
+运行与检查方法见[检查与排错](../../docs/verification.md)。此示例使用合成页面；接入真实服务后，需要分别验证认证、业务结果、资源恢复和桌面呈现。独立导出是快照，源流程修改后需要同步。

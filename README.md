@@ -71,18 +71,18 @@ business-project/
 
 - [入门样例](examples/starter/.playbook.json) / [SDK 类型与执行入口](src/index.ts)
 - [Skill 创作与维护指引](skills/playbook-wright/SKILL.md)
-- [技术架构](docs/architecture.md) / [产品方案](docs/product-plan.md) / [验证记录](docs/verification.md)
+- [技术架构](docs/architecture.md) / [使用指南](docs/usage.md) / [检查与排错](docs/verification.md)
 
-需要突出宽段落或多行正文时，可在单步启用 v0.7.1 的文字聚光：
+需要突出多行正文时，可为步骤设置文字聚光。下面的提示文字需替换为实际页面内容：
 
 ```ts
 {
-  id: 'read-result', title: '阅读结果', explain: '阅读真实提示。',
-  target: ({ page }) => page.getByText('生成服务尚未配置，可继续手工编写；已有内容已保留。', { exact: true }),
+  id: 'read-result', title: '查看结果', explain: '这里展示操作完成后的提示。',
+  target: ({ page }) => page.getByText('操作已完成。', { exact: true }),
   presentation: { spotlight: 'text', side: 'bottom', holdMs: 6500, afterMs: 6000 },
   run: async () => {},
   verify: async ({ page }) => {
-    if (!(await page.getByText('生成服务尚未配置，可继续手工编写；已有内容已保留。', { exact: true }).isVisible()))
+    if (!(await page.getByText('操作已完成。', { exact: true }).isVisible()))
       throw new Error('提示未出现');
   },
 }
@@ -125,7 +125,7 @@ npm run package:mac    # macOS Apple Silicon 分发包
 
 内置浏览器以单个主页面为主，会拦截网页弹窗；多窗口、Chrome 扩展等流程需要外部模式并单独验证。PPTX 导出会重新执行流程，输出的是截图课件，控件不可单独编辑；声音和换页计时应在实际使用的演示软件中检查。失败或停止导出会保留旧目标文件。
 
-客户端没有内置模型账户，脚本创作由你选择的智能体完成。当前平台和实际验证结果见[验证记录](docs/verification.md)。
+客户端没有内置模型账户，脚本创作由你选择的智能体完成。环境要求和常见问题见[检查与排错](docs/verification.md)。
 
 ## 许可
 

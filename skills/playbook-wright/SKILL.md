@@ -7,7 +7,7 @@ description: 为 Playbook 桌面播放器创作、维护与验证业务脚本和
 
 帮助用户把“希望怎样演示”变成可验证的 Playbook 业务资产。用户自己的智能体负责创作、维护、效果调整、Book/Section 编排和 TC 转换；桌面应用负责项目浏览、搜索、播放、暂停继续、停止重播、PPTX 导出与运行反馈。Playwright 继续执行原生操作和断言。业务脚本、Profile 与清单留在业务仓库，不把客户脚本、凭据或证据写入产品仓库。
 
-主调用名为 `$playbook-wright`；旧 `$playbook-playwright` 通过同级兼容 Skill 读取本文件，执行同一套指引。产品名仍为 Playbook，不改 SDK 名、清单或业务资产。
+主调用名为 `$playbook-wright`；旧 `$playbook-playwright` 通过同级兼容 Skill 读取本文件，执行同一套指引。
 
 ## 开始时
 

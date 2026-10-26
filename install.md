@@ -109,7 +109,7 @@ Claude Code 项目安装将 `--framework codex` 换成 `--framework claude-code`
 
 | 可选参数 | 作用 |
 |---|---|
-| `--app-dir /absolute/directory` | 指定应用所在或安装目录，例如 `/Users/me/Applications` |
+| `--app-dir /absolute/directory` | 指定应用所在或安装目录，例如 `/absolute/path/to/apps` |
 | `--check-app` | 只检查应用，不安装；退出码 3 表示未找到可用应用 |
 | `--replace` | 已有明确授权后，备份并替换被本地修改或存在冲突的 Skill |
 

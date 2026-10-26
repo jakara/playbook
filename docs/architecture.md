@@ -1,6 +1,6 @@
 # Playbook 技术架构
 
-日期：2026-10-25。客户端 v0.7.1，清单与脚本 `schemaVersion: 1`，随包 Skill 为 0.10.1。旧脚本向后兼容，新呈现字段需要 v0.3 播放器。本文说明功能契约与实现边界；实际验收版本与结果见 [verification.md](verification.md)。
+本文说明客户端、运行器和业务脚本之间的接口与数据边界。清单与脚本使用 `schemaVersion: 1`；操作方法见[使用指南](usage.md)，环境检查见[检查与排错](verification.md)。
 
 ## 进程与职责
 
@@ -92,7 +92,7 @@ Book 和 Section 是引用与顺序容器，没有独立业务 callbacks。Book�
 
 ## 构建快照与检查入口
 
-点击播放后，主进程重新发现、校验条目和环境数据类别，再由 esbuild 将脚本与 Profile 构建为本轮 `flow.mjs`。`@playbook/core` 指向产品内置核心，Playwright 来自产品依赖，其余依赖按工作区解析；首版不自动安装业务依赖。
+点击播放后，主进程重新发现、校验条目和环境数据类别，再由 esbuild 将脚本与 Profile 构建为本轮 `flow.mjs`。`@playbook/core` 指向产品内置核心，Playwright 来自产品依赖，其余依赖按工作区解析；业务依赖由项目提供。
 
 产物写应用用户数据目录的本轮缓存。`snapshotHash` 来自构建代码、参数与声明的录音快照；构建后重新检查项目 token，期间变化则拒绝启动。本轮执行已构建快照，并保存步骤信息用于运行展示；来源变化只影响下一轮。录音限定为工作区内的相对路径与支持格式，构建时校验并复制为本轮资源，不在播放途中重新读取源录音。
 
@@ -102,7 +102,7 @@ Book 和 Section 是引用与顺序容器，没有独立业务 callbacks。Book�
 
 ## 演示与测试入口
 
-桌面入口：选择脚本、Section 或 Book 与已有 Profile → 按容器顺序展开脚本 → 构建快照 → `utilityProcess` 加载 → 本机 Chrome → 每脚本准备上下文 → 引导、动作、断言 → 释放资源 → 记录结果。
+桌面入口：选择脚本、Section 或 Book 与已有 Profile → 按容器顺序展开脚本 → 构建快照 → `utilityProcess` 加载 → 所选浏览器 → 每脚本准备上下文 → 引导、动作、断言 → 释放资源 → 记录结果。
 
 测试入口继续使用原项目 Playwright Test 的 fixture、配置、报告和 teardown，通过 `runPlaybook`/`test.step` 复用同一流程，或由 Skill 导出独立 TC。
 
@@ -150,7 +150,7 @@ stateDiagram-v2
 
 流程 `narration` 包含 enabled、voice、rate 和 opening，步骤 narration 可为 false 或 `{ text?, audio? }`，文字和录音互斥。默认关闭；enabled 为 true 时开场读 title 与 summary，每步读 explain；单步对象可独立启用，false 静音。opening 可以关闭或覆盖开场讲解。语音与页面提示/光标配合播放，当前音频与最短 hold 均完成后才操作，不靠猜音频长度设置等待。
 
-macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/min，rate 范围 80–400；不请求云服务或模型账户。所选声线须在系统可用，生成或播放失败向上传播并停止。其他平台本轮先支持本地录音。audio 使用工作区相对路径，支持 wav/mp3/m4a/ogg、单文件不超过 20 MB，拒绝网络 URL、绝对或越界引用并随本轮快照冻结。语音控制与运行器暂停/继续/停止同步，停止释放当前播放资源；实际听感与系统输出设备仍需实测。
+macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/min，rate 范围 80–400；不请求云服务或模型账户。所选声线须在系统可用，生成或播放失败向上传播并停止。系统文字朗读仅支持 macOS，其他平台需使用本地录音。audio 使用工作区相对路径，支持 wav/mp3/m4a/ogg、单文件不超过 20 MB，拒绝网络 URL、绝对或越界引用并随本轮快照冻结。语音控制与运行器暂停/继续/停止同步，停止释放当前播放资源；实际听感与系统输出设备仍需实测。
 
 `runPlaybook` 的测试入口不处理柔边、打码或语音，也不增加相应等待。Skill 独立导出 TC 时移除这些元数据和资源调用，保留动作、断言与测试生命周期，不将遮盖转成 DOM 修改或测试步骤。
 
@@ -170,7 +170,7 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 ## 内置 Skill 安装
 
-完整创作、维护、呈现调整与 TC 转换 Skill 来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`；它们随公开仓库、应用和 Skill 压缩包一起按 MIT 许可交付。`.private/` 仅为不发布的本地备份。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
+完整创作、维护、呈现调整与 TC 转换 Skill 来源为 `skills/playbook-wright/`，兼容入口来源为 `skills/playbook-playwright/`，随应用和 Skill 压缩包交付。下表为主目标，另在同一 skills 父目录安装 `playbook-playwright/` 轻量入口，链接主 Skill；不依赖虚构的 aliases 元数据或软链接。当前目标：
 
 | 框架 | 个人目标 | 项目目标 |
 |---|---|---|
@@ -197,17 +197,13 @@ macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/mi
 
 记录含步骤、进度、环境、时间、摘要与错误。脚本 stdout/stderr 不转发；错误做敏感字段遮盖和长度限制，不能保证任意业务文本完全脱敏。截图/视觉检查目前由验收环境开关启用，尚无用户 trace、视频或脱敏导出流程。
 
-`desktop:build` 构建核心、主进程、运行器、preload 与 Vite 界面；`package:mac` 当前生成 macOS arm64 `.app` 和 ZIP。运行环境与依赖随应用交付，无需外置 Node。Chrome 使用本机版本，不捆绑 Chromium，不连接日常 Chrome，也不要求其远程调试端口。
+`desktop:build` 构建核心、主进程、运行器、preload 与 Vite 界面；`package:mac` 生成 macOS arm64 应用、DMG 和 ZIP。运行环境与依赖随应用交付，无需外置 Node。外部模式使用本机 Chrome，内置模式使用 Electron 浏览器；两者均不连接日常 Chrome 会话。
 
-## 后续路线与限制
+## 支持范围
 
-当前功能包括只读项目、Book/Section 批量播放、静态发现、代码/录音快照、独立运行器、单页引导、柔边光圈、流程级打码、本地语音/录音、原生悬浮控制、系统快捷键、反馈和两个框架 Skill 安装；通过范围以验收记录为准。
+安装包面向 macOS Apple Silicon，未签名、未公证，不含应用内自动更新。内置浏览器以单个主页面为主；新窗口、复杂 frame、扩展或系统对话框流程需要选择合适容器并单独适配。排错方法见[检查与排错](verification.md)。
 
-当前实测范围为 macOS Apple Silicon，未完成 Intel、Windows、Linux 或干净机器验收。当前包无签名、公证与自动更新。
-
-后续仍需按真实目标推进：业务仓库 Profile 与写入/恢复策略集成；发现与依赖变化覆盖；升级兼容和可检查导出；多页面/frame/系统交互引导；干净机器、签名公证与跨平台；更多框架适配和加载验证。是否捆绑浏览器、trace/视频、连接已有浏览器均属后续能力，不计入首版。
-
-## PPTX 输出链路（v0.4）
+## PPTX 输出链路
 
 Book/Section/脚本详情经受限 IPC 请求导出。主进程先打开系统保存窗口，取消不启动任务；确认后沿用 play 调度、重播保护和静态快照，启动同一运行器，额外提供本轮缓存 exportDir。业务源码和录音不写回。
 
@@ -219,7 +215,7 @@ Book/Section/脚本详情经受限 IPC 请求导出。主进程先打开系统�
 
 浏览器操作和呈现阶段仍支持暂停/继续；生成 PPTX 阶段只支持停止，暂停按钮禁用，全局暂停键忽略。缓存保留本轮快照、截图及音频供诊断，遵循现有本机用户数据边界。输出是可分享内容，应检查画面和备注/音频，不将视觉遮盖当作业务数据脱敏。
 
-## 资源回执与重启恢复（v0.5）
+## 资源回执与重启恢复
 
 `desktop/lifecycle.mjs` 管理每次 prepare 的清理 scope、可选精确恢复句柄、预算与脱敏。registerCleanup 等待主进程将 JSON 责任写入 runs.json 并确认，调用方须 await 后再创建资源。写入串行化，以临时文件、fsync、rename、目录 fsync 提交；不序列化函数或参数凭据。只有 final 回执可落成功终态，晚到结果不覆盖未知状态或吞掉错误。
 

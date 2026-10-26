@@ -1,6 +1,6 @@
 # Profile 取消、清理与崩溃恢复
 
-适用于客户端 v0.6、Skill 0.9.2；`schemaVersion: 1` 不变。新能力均可选，旧 `prepare({ page, workspaceDir, parameters }) → { context, release? }` 继续播放。应用协调取消、预算、回执与恢复；资源归属、保留/删除策略和精确释放由业务 Profile 判断，不为旧 run 自动开启 purge。
+本页说明 Profile 的取消、清理与恢复接口；`schemaVersion: 1` 不变。新能力均可选，旧 `prepare({ page, workspaceDir, parameters }) → { context, release? }` 继续播放。应用协调取消、预算、回执与恢复；资源归属、保留/删除策略和精确释放由业务 Profile 判断，不为旧 run 自动开启 purge。
 
 ## 生命周期与取消
 
