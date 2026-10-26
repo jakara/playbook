@@ -4,11 +4,11 @@
 
 本指引配合正式 GitHub Release 的安装接口。若所需资产尚未发布，停止并说明缺少的资产；不改用未知镜像、猜测下载地址或宣称已完成。
 
-此流程安装客户端和完整的 `playbook-wright` Skill，包含演示创作、维护、呈现调整与 Playwright TC 双向复用/转换指引；`playbook-playwright` 保留为兼容入口。客户端和 Skill 均采用 [MIT](LICENSE) 许可。
+此流程安装客户端和完整的 `playbook-wright` Skill，包含演示创作、维护、呈现调整与 Playwright TC 双向复用/转换指引；`playbook-playwright` 保留为兼容入口。在 DSH Shell 中执行 `--install` 时，还会识别当前 profile 并安装 Playbook DSH 插件。客户端和 Skill 均采用 [MIT](LICENSE) 许可。
 
 ## 1. 确定安装目标
 
-从用户请求确认“仅应用”或“应用 + Skill”，以及 Codex / Claude Code、个人 / 指定项目。已明确或能核实的内容不要重复询问；仅在缺少框架或项目路径时补齐必要信息。
+从用户请求确认“仅应用”或“应用 + Skill”，以及 Codex / Claude Code / DSH、个人 / 指定项目。已明确或能核实的内容不要重复询问；仅在缺少框架或项目路径时补齐必要信息。DSH Shell 会提供 `DSH_SHELL=1`、`DSH_PROFILE` 和 `DSH_PROFILE_DIR`；普通终端可明确传 `--dsh-profile <名称>`，仅安装了 DSH 应用不会触发插件安装。
 
 支持范围为 **macOS Apple Silicon**。先检查：
 
@@ -96,6 +96,16 @@ PLAYBOOK_RELEASE_TAG="$PLAYBOOK_RELEASE_TAG" \
     --install --framework claude-code --scope user
 ```
 
+**在 DSH 中安装 Skill 与插件：** DSH 会读取 `~/.agents/skills`，安装器将 `--framework dsh` 的 Skill 放到该位置。当前 DSH Shell 自动使用本会话的 profile。
+
+```sh
+PLAYBOOK_RELEASE_TAG="$PLAYBOOK_RELEASE_TAG" \
+  bash "$PLAYBOOK_INSTALL_TMP/install.sh" \
+    --install --framework dsh --scope user
+```
+
+若在普通终端为已经退出的 DSH Desktop 安装，可再传 `--dsh-profile desktop`；安装器会备份 profile 配置，并仅放行插件依赖 `esbuild` 的构建脚本。运行中的 DSH Desktop 不能由外部 `dsh plugin` 命令修改 profile：此时安装器会下载、校验并保留插件包，然后要求当前 DSH 智能体通过内置 `plugin_manager` 的 `install_bundle` 完成安装。此分支退出码为 4，不能将 Skill 成功误报为插件已安装。
+
 **安装到指定项目：** 将示例路径替换为用户明确指定的、智能体实际打开的项目绝对路径，不推断为演示子目录或上级仓库。
 
 ```sh
@@ -112,6 +122,7 @@ Claude Code 项目安装将 `--framework codex` 换成 `--framework claude-code`
 | `--app-dir /absolute/directory` | 指定应用所在或安装目录，例如 `/absolute/path/to/apps` |
 | `--check-app` | 只检查应用，不安装；退出码 3 表示未找到可用应用 |
 | `--replace` | 已有明确授权后，备份并替换被本地修改或存在冲突的 Skill |
+| `--dsh-profile name` | 在普通终端中明确指定要安装插件的已初始化 DSH profile |
 
 安装器自动检查应用：满足最低版本的已有应用复用；缺失时下载、校验官方 ZIP，安装到用户 Applications。公开 Skill 资产为 `playbook-skills.tar.gz`，包内含完整创作/维护/TC 指引、兼容入口及自包含 CLI，由已安装应用的 Electron Node 执行；不依赖外置 Node，也不要求旧应用已携带这个新 CLI。
 
@@ -132,9 +143,11 @@ Claude Code 项目安装将 `--framework codex` 换成 `--framework claude-code`
    | 框架 | 个人范围 | 项目范围 |
    |---|---|---|
    | Codex | `~/.agents/skills/{playbook-wright,playbook-playwright}` | `<项目>/.agents/skills/{playbook-wright,playbook-playwright}` |
+   | DSH | `~/.agents/skills/{playbook-wright,playbook-playwright}` | `<项目>/.agents/skills/{playbook-wright,playbook-playwright}` |
    | Claude Code | `~/.claude/skills/{playbook-wright,playbook-playwright}` | `<项目>/.claude/skills/{playbook-wright,playbook-playwright}` |
 
 3. 提醒用户重新加载智能体 Skills 或开启新会话，再调用 `$playbook-wright` 创作、维护演示或转换 Playwright TC；旧 `$playbook-playwright` 是兼容入口。文件校验成功与智能体已加载分开说明，未实际调用时不得声称调用已验证。
+   在 DSH 环境中，另核对当前 profile 的 `dsh.profile.bundles` 包含 `playbook-dsh`，并在界面中看到 Playbook 入口。若安装器返回退出码 4，当前 DSH 智能体应先用 `plugin_manager` 列出 bundle，再以安装器输出的插件包绝对路径执行 `install_bundle`；仅在工具明确列出 `esbuild` 为待批准构建脚本且用户已授权时批准该项，并核对实际应用结果。
 4. 打开应用首页的 **Playbook 使用教程**。先体验内置播放；Skill 实操环节只有用户选择并点击的安装才产生真实写入。
 5. 简短报告固定的 Release tag、应用路径/版本、Skill 版本、安装范围、两个 Skill 位置、实际检查结果、备份位置，以及仍需用户完成的系统交互或重载。不输出凭据。
 

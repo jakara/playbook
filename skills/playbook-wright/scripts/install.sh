@@ -35,10 +35,16 @@ APP_STAGE=''
 APP_LOCK=''
 FOUND_APP=''
 TAG="${PLAYBOOK_RELEASE_TAG:-}"
+DSH_TARGET_PROFILE=''
+DSH_TARGET_DIR=''
+DSH_CLI=''
+DSH_PLUGIN_TAG='playbook-dsh-v0.1.0'
+DSH_PLUGIN_FILE='playbook-dsh-0.1.0.tgz'
+DSH_PLUGIN_SHA256='38a1a30d613f04ffb0d3740e6f08b50dc5c72dc368dc1e65f3c9db8bda063458'
 
 fail() { printf 'Playbook: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf '%s\n' 'Usage: bash install.sh --check-app | --ensure-app | --install --framework codex|claude-code --scope user|project [--project-root /path] [--app-dir /path] [--replace]'
+  printf '%s\n' 'Usage: bash install.sh --check-app | --ensure-app | --install --framework codex|claude-code|dsh --scope user|project [--project-root /path] [--app-dir /path] [--dsh-profile name] [--replace]'
 }
 cleanup() {
   [ -z "$APP_STAGE" ] || /bin/rm -rf "$APP_STAGE"
@@ -51,11 +57,12 @@ trap 'exit 143' TERM
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --check-app|--ensure-app|--install) [ -z "$MODE" ] || fail '请只选择一种安装动作。'; MODE="$1"; shift ;;
-    --framework|--scope|--project-root|--app-dir)
+    --framework|--scope|--project-root|--app-dir|--dsh-profile)
       [ "$#" -ge 2 ] && [[ "$2" != --* ]] || fail "$1 缺少值。"
       case "$1" in
         --framework) FRAMEWORK="$2" ;; --scope) SCOPE="$2" ;;
         --project-root) PROJECT_ROOT="$2" ;; --app-dir) APP_DIR="${2%/}" ;;
+        --dsh-profile) DSH_TARGET_PROFILE="$2" ;;
       esac
       shift 2 ;;
     --replace) REPLACE=1; shift ;;
@@ -70,12 +77,29 @@ if [ "$(uname -s)" != 'Darwin' ] || [ "$(uname -m)" != 'arm64' ]; then
 fi
 if [ -n "$APP_DIR" ]; then [[ "$APP_DIR" = /* ]] || fail '--app-dir 必须是绝对路径。'; fi
 if [ "$MODE" = '--install' ]; then
-  case "$FRAMEWORK" in codex|claude-code) ;; *) fail '--framework 请选择 codex 或 claude-code。' ;; esac
+  case "$FRAMEWORK" in codex|claude-code|dsh) ;; *) fail '--framework 请选择 codex、claude-code 或 dsh。' ;; esac
   case "$SCOPE" in
     user) ;;
     project) [[ "$PROJECT_ROOT" = /* ]] && [ -d "$PROJECT_ROOT" ] || fail '--project-root 必须是现有项目的绝对路径。' ;;
     *) fail '--scope 请选择 user 或 project。' ;;
   esac
+  if [ -z "$DSH_TARGET_PROFILE" ] && [ "${DSH_SHELL:-}" = '1' ]; then
+    DSH_TARGET_PROFILE="${DSH_PROFILE:-}"
+    [ -n "$DSH_TARGET_PROFILE" ] || fail '已检测到 DSH Shell，但无法确定当前 profile；请用 --dsh-profile 指定。'
+  fi
+  if [ -n "$DSH_TARGET_PROFILE" ]; then
+    [[ "$DSH_TARGET_PROFILE" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] || fail 'DSH profile 名称无效。'
+    DSH_DATA_HOME="${DSH_HOME:-$HOME/.dsh}"
+    [[ "$DSH_DATA_HOME" = /* ]] || fail 'DSH_HOME 必须是绝对路径。'
+    DSH_TARGET_DIR="$DSH_DATA_HOME/profiles/$DSH_TARGET_PROFILE"
+    if [ "${DSH_SHELL:-}" = '1' ] && [ -n "${DSH_PROFILE_DIR:-}" ]; then
+      [ "$DSH_PROFILE_DIR" = "$DSH_TARGET_DIR" ] || fail '当前 DSH profile 目录与 DSH_HOME 不一致，已停止安装。'
+    fi
+    [ -f "$DSH_TARGET_DIR/package.json" ] || fail "DSH profile 尚未初始化：$DSH_TARGET_DIR"
+  fi
+  if [ "$FRAMEWORK" = 'dsh' ] && [ -z "$DSH_TARGET_PROFILE" ]; then
+    fail '已选择 DSH Skill，但未检测到当前 DSH profile；请用 --dsh-profile 指定。'
+  fi
 fi
 
 app_version() { /usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$1/Contents/Info.plist" 2>/dev/null; }
@@ -125,6 +149,89 @@ verified_download() {
   [ "$actual" = "$expected" ] || fail "SHA-256 校验失败：$filename"
 }
 
+install_dsh_plugin() {
+  local plugin_base="https://github.com/$REPOSITORY/releases/download/$DSH_PLUGIN_TAG"
+  local expected actual package_dir package_path backup_dir filename workspace_file staged
+  download "$plugin_base/SHA256SUMS" "$TEMP_ROOT/dsh-SHA256SUMS" || fail '无法下载 DSH 插件校验清单。'
+  expected="$(/usr/bin/awk -v wanted="$DSH_PLUGIN_FILE" '$2 == wanted || $2 == "*" wanted {print $1}' "$TEMP_ROOT/dsh-SHA256SUMS")"
+  [ "$expected" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件发布校验值与安装器记录不一致。'
+  download "$plugin_base/$DSH_PLUGIN_FILE" "$TEMP_ROOT/$DSH_PLUGIN_FILE" || fail '无法下载 DSH 插件包。'
+  actual="$(/usr/bin/shasum -a 256 "$TEMP_ROOT/$DSH_PLUGIN_FILE" | /usr/bin/awk '{print $1}')"
+  [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件包 SHA-256 校验失败。'
+
+  package_dir="$DSH_DATA_HOME/packages/playbook-dsh"
+  /bin/mkdir -p "$package_dir"
+  package_path="$package_dir/$DSH_PLUGIN_FILE"
+  if [ -e "$package_path" ] || [ -L "$package_path" ]; then
+    [ -f "$package_path" ] && [ ! -L "$package_path" ] || fail 'DSH 插件包目标不是普通文件，已保留。'
+    actual="$(/usr/bin/shasum -a 256 "$package_path" | /usr/bin/awk '{print $1}')"
+    [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail '同版本 DSH 插件包内容不匹配，已保留原文件。'
+  else
+    staged="$(/usr/bin/mktemp "$package_dir/.playbook-dsh.XXXXXX")"
+    /bin/cp "$TEMP_ROOT/$DSH_PLUGIN_FILE" "$staged"
+    actual="$(/usr/bin/shasum -a 256 "$staged" | /usr/bin/awk '{print $1}')"
+    [ "$actual" = "$DSH_PLUGIN_SHA256" ] || fail 'DSH 插件包持久副本校验失败。'
+    /bin/mv -n "$staged" "$package_path"
+    [ ! -e "$staged" ] || fail 'DSH 插件包目标在复制时被占用。'
+  fi
+
+  backup_dir="$DSH_DATA_HOME/backups/playbook-dsh/$(/bin/date +%Y%m%d-%H%M%S)-$$"
+  (umask 077; /bin/mkdir -p "$backup_dir")
+  for filename in package.json pnpm-lock.yaml pnpm-workspace.yaml; do
+    if [ -f "$DSH_TARGET_DIR/$filename" ]; then
+      /bin/cp -p "$DSH_TARGET_DIR/$filename" "$backup_dir/$filename"
+      /usr/bin/cmp -s "$DSH_TARGET_DIR/$filename" "$backup_dir/$filename" || fail "DSH 配置备份核验失败：$filename"
+    fi
+  done
+  if [ "$DSH_TARGET_PROFILE" = 'desktop' ] && [ "${DSH_SHELL:-}" = '1' ]; then
+    printf 'Playbook: Skill 已安装；DSH Desktop 正在运行，插件包已下载并校验：%s\n' "$package_path" >&2
+    printf 'Playbook: DSH 配置备份：%s\n' "$backup_dir" >&2
+    printf '%s\n' 'Playbook: 请让当前 DSH 智能体调用 plugin_manager：先 list_bundles，再 install_bundle，target 使用上面的绝对路径；若返回 pendingBuilds 仅包含 esbuild，可批准该项并重试。核对 Playbook 入口后才算完成。' >&2
+    return 4
+  fi
+
+  if [ -n "${PLAYBOOK_DSH_CLI:-}" ]; then
+    [ -x "$PLAYBOOK_DSH_CLI" ] || fail 'PLAYBOOK_DSH_CLI 不是可执行文件。'
+    DSH_CLI="$PLAYBOOK_DSH_CLI"
+  elif [ "$DSH_TARGET_PROFILE" = 'desktop' ]; then
+    for candidate in '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh' "$HOME/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"; do
+      if [ -x "$candidate" ]; then DSH_CLI="$candidate"; break; fi
+    done
+    [ -n "$DSH_CLI" ] || fail '找不到 DSH Desktop 随附命令；请安装或注册 dsh 命令。'
+  else
+    DSH_CLI="$(type -P dsh || true)"
+    if [ -z "$DSH_CLI" ]; then
+      for candidate in '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh' "$HOME/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"; do
+        if [ -x "$candidate" ]; then DSH_CLI="$candidate"; break; fi
+      done
+    fi
+    [ -n "$DSH_CLI" ] || fail '找不到 dsh 命令，无法安装到当前 profile。'
+  fi
+
+  workspace_file="$DSH_TARGET_DIR/pnpm-workspace.yaml"
+  [ -f "$workspace_file" ] || fail 'DSH profile 缺少 pnpm-workspace.yaml，已保留现状。'
+  if ! /usr/bin/grep -q '^  esbuild: true$' "$workspace_file"; then
+    if /usr/bin/grep -q '^  esbuild:' "$workspace_file"; then
+      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
+      /usr/bin/awk '/^  esbuild:/ { print "  esbuild: true"; next } { print }' "$workspace_file" > "$staged"
+    elif /usr/bin/grep -q '^allowBuilds:$' "$workspace_file"; then
+      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
+      /usr/bin/awk '/^allowBuilds:$/ { print; print "  esbuild: true"; next } { print }' "$workspace_file" > "$staged"
+    else
+      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
+      /bin/cat "$workspace_file" > "$staged"
+      printf '\nallowBuilds:\n  esbuild: true\n' >> "$staged"
+    fi
+    /bin/chmod 600 "$staged"
+    /bin/mv "$staged" "$workspace_file"
+    /usr/bin/grep -q '^  esbuild: true$' "$workspace_file" || fail 'DSH esbuild 放行配置写入失败。'
+  fi
+  "$DSH_CLI" plugin --profile "$DSH_TARGET_PROFILE" add "$package_path" || fail "DSH 插件安装失败；配置备份位于 $backup_dir"
+  /usr/bin/plutil -extract dsh.profile.bundles json -o - "$DSH_TARGET_DIR/package.json" | /usr/bin/grep -q '"playbook-dsh"' || fail 'DSH profile 未启用 playbook-dsh。'
+  [ -f "$DSH_TARGET_DIR/node_modules/playbook-dsh/server.mjs" ] || fail 'DSH 插件包文件缺失。'
+  printf 'DSH 插件已安装到 %s，配置备份：%s\n' "$DSH_TARGET_PROFILE" "$backup_dir" >&2
+}
+
 if [ -z "$FOUND_APP" ]; then
   resolve_release
   printf '正在安装 Playbook %s…\n' "$TAG" >&2
@@ -169,8 +276,11 @@ while IFS= read -r entry; do case "$entry" in -*|d*) ;; *) fail 'Skill 包含链
 /bin/mkdir "$TEMP_ROOT/skill"
 /usr/bin/tar -xzf "$TEMP_ROOT/playbook-skills.tar.gz" -C "$TEMP_ROOT/skill"
 [ -f "$TEMP_ROOT/skill/install-skill.cjs" ] && [ -f "$TEMP_ROOT/skill/skills/playbook-wright/SKILL.md" ] || fail 'Skill 包不完整。'
-INSTALL_ARGS=(--source-dir "$TEMP_ROOT/skill/skills/playbook-wright" --framework "$FRAMEWORK" --scope "$SCOPE")
+SKILL_FRAMEWORK="$FRAMEWORK"
+if [ "$FRAMEWORK" = 'dsh' ]; then SKILL_FRAMEWORK='codex'; fi
+INSTALL_ARGS=(--source-dir "$TEMP_ROOT/skill/skills/playbook-wright" --framework "$SKILL_FRAMEWORK" --scope "$SCOPE")
 if [ "$SCOPE" = 'project' ]; then INSTALL_ARGS+=(--project-root "$PROJECT_ROOT"); fi
 if [ "$REPLACE" -eq 1 ]; then INSTALL_ARGS+=(--replace); fi
 ELECTRON_RUN_AS_NODE=1 "$FOUND_APP/Contents/MacOS/Playbook" "$TEMP_ROOT/skill/install-skill.cjs" "${INSTALL_ARGS[@]}"
 printf '%s\n' 'Skill 安装完成。请在目标智能体重新加载技能或打开新会话，再调用 $playbook-wright（兼容 $playbook-playwright）。' >&2
+if [ -n "$DSH_TARGET_PROFILE" ]; then install_dsh_plugin; fi
