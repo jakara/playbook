@@ -1,11 +1,86 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createHash } from 'node:crypto';
-import { mkdtemp, writeFile, rm, truncate } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, writeFile, rm, truncate } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { narrationSource, renderSpeech } from '../desktop/narration.mjs';
+import vm from 'node:vm';
+import { narrationSource, renderSpeech, narrationEnabled } from '../desktop/narration.mjs';
+import { atomicJSON } from '../desktop/lifecycle.mjs';
+
+test('client narration defaults to TTS for unconfigured flows and preserves explicit silence and clips', () => {
+  for (const flow of [{}, { narration: {} }, { narration: { enabled: true } }]) {
+    assert.equal(narrationEnabled(flow), true);
+    assert.equal(narrationEnabled(flow, false), false);
+    for (const clip of [undefined, { text: 'Hello' }, { audio: 'clip.wav' }]) assert.equal(narrationEnabled(flow, clip, false), false);
+  }
+  assert.equal(narrationEnabled({ narration: { enabled: false } }), false);
+  assert.equal(narrationEnabled({ narration: { enabled: false } }, { text: 'Explicit' }), true);
+});
+
+const runner = await readFile(new URL('../desktop/runner.mjs', import.meta.url), 'utf8');
+const voiceSourceCode = runner.slice(runner.indexOf('async function voiceSource('), runner.indexOf('\nfunction startVoice('));
+const commandCode = runner.slice(runner.indexOf('async function commandHandler('), runner.indexOf('\nreceive(message'));
+
+test('muting during synthesis cancels only the voice and rapid unmuting can narrate the next segment', async () => {
+  let synthesizing, stoppedAudio = 0;
+  const ready = new Promise(resolve => { synthesizing = resolve; });
+  const context = vm.createContext({ config: { bundle: '/snapshot/flow.mjs', narrationEnabled: true },
+    narrationAbort: null, narrationEnabled, AbortController, path, checkpoint: async () => {},
+    stopVoice: async () => { stoppedAudio++; },
+    narrationSource: ({ signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('muted', 'AbortError')), { once: true }); synthesizing();
+    }),
+  });
+  vm.runInContext(voiceSourceCode + '\n' + commandCode, context);
+  const source = vm.runInContext("voiceSource({}, undefined, 'default text')", context);
+  await ready;
+  await vm.runInContext("commandHandler({command:'narration',enabled:false})", context);
+  await vm.runInContext("commandHandler({command:'narration',enabled:true})", context);
+  assert.equal(await source, undefined); assert.equal(stoppedAudio, 1);
+  context.narrationSource = async () => ({ kind: 'tts' });
+  assert.equal((await vm.runInContext("voiceSource({}, undefined, 'next text')", context)).kind, 'tts');
+  context.config.exportDir = '/export';
+  await vm.runInContext("commandHandler({command:'narration',enabled:false})", context);
+  assert.equal(context.config.narrationEnabled, true, 'export keeps its initial narration choice');
+});
+
+test('muting while paused prevents synthesis after resuming and voice errors still propagate', async () => {
+  let continuePlayback, synthesisCalls = 0;
+  const paused = new Promise(resolve => { continuePlayback = resolve; });
+  const context = vm.createContext({ config: { bundle: '/snapshot/flow.mjs', narrationEnabled: true },
+    narrationAbort: null, narrationEnabled, AbortController, path, checkpoint: () => paused,
+    narrationSource: async () => { synthesisCalls++; throw new Error('voice failure'); },
+  });
+  vm.runInContext(voiceSourceCode, context);
+  const source = vm.runInContext("voiceSource({}, undefined, 'text')", context);
+  context.config.narrationEnabled = false; continuePlayback();
+  assert.equal(await source, null); assert.equal(synthesisCalls, 0);
+  context.config.narrationEnabled = true;
+  await assert.rejects(vm.runInContext("voiceSource({}, undefined, 'text')", context), /voice failure/);
+});
+
+test('client switch persists across reload, rejects invalid values and leaves active export audio unchanged', async t => {
+  const dataDir = await fixture(t), settingsFile = path.join(dataDir, 'settings.json'), messages = [];
+  const main = await readFile(new URL('../desktop/main.mjs', import.meta.url), 'utf8');
+  const saveCode = main.slice(main.indexOf('async function saveSettings('), main.indexOf('\nasync function refresh('));
+  const setterCode = main.slice(main.indexOf('async function setNarrationEnabled('), main.indexOf('\nfunction guardRun('));
+  const context = vm.createContext({ settings: { schemaVersion: 1, roots: ['/project'] }, settingsFile, dataDir,
+    readFile, writeFile, mkdir, path, Buffer, randomUUID, atomicJSON, publish() {}, viewState: () => ({}),
+    activeRun: { mode: 'play' }, worker: { postMessage: value => messages.push(value) },
+  });
+  vm.runInContext(saveCode + '\n' + setterCode, context);
+  await vm.runInContext('setNarrationEnabled(false)', context);
+  const reloaded = JSON.parse(await readFile(settingsFile, 'utf8'));
+  assert.equal(reloaded.narrationEnabled, false); assert.deepEqual(reloaded.roots, ['/project']);
+  assert.equal(messages.length, 1); assert.equal(messages[0].command, 'narration'); assert.equal(messages[0].enabled, false);
+  await assert.rejects(vm.runInContext("setNarrationEnabled('false')", context), /开关无效/);
+  context.activeRun.mode = 'pptx';
+  await vm.runInContext('setNarrationEnabled(true)', context);
+  assert.equal(messages.length, 1);
+  assert.equal(JSON.parse(await readFile(settingsFile, 'utf8')).narrationEnabled, true);
+});
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'playbook-narration-'));

@@ -18,6 +18,7 @@
     #actions { display:flex; justify-content:flex-end; gap:8px }
     button { font:inherit; cursor:pointer; border:1px solid #b7c5d2; border-radius:7px; padding:7px 11px; color:#18334f; background:#fff }
     button.primary { background:#215e9c; border-color:#215e9c; color:white }
+    button.danger { color:#a43c30; margin-right:auto }
     button:disabled { opacity:.55; cursor:default }
     .pin { position:fixed; width:30px; height:30px; padding:0; border-radius:50%; background:#215e9c; border:2px solid white; color:white; box-shadow:0 3px 12px #0005; pointer-events:auto; font-size:15px; font-weight:bold }
     #detail { position:fixed; width:min(340px,calc(100vw - 24px)); padding:14px; border-radius:10px; background:white; border:1px solid #c8d5e3; box-shadow:0 12px 38px #10243d55; pointer-events:auto }
@@ -25,10 +26,10 @@
     #detail p { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:0 0 10px }
     #detail footer { display:flex; gap:8px; justify-content:flex-end }
     #copy-status { color:#52677e; min-height:18px; font-size:12px }
-  </style><div id="outline" hidden></div><div id="tip" hidden></div><section id="panel" role="dialog" aria-label="添加批注" hidden><h2>添加批注</h2><p id="target"></p><textarea id="body" maxlength="5000" aria-label="批注内容" placeholder="描述问题、期望效果或改进建议"></textarea><p id="error" role="alert"></p><div id="actions"><button id="cancel" type="button">取消</button><button id="save" type="button" class="primary">确认批注</button></div></section><section id="detail" role="dialog" aria-label="查看批注" hidden><strong>Playbook 批注</strong><p id="detail-body"></p><div id="copy-status" role="status"></div><footer><button id="close-detail" type="button">关闭</button><button id="copy" type="button" class="primary">复制给智能体</button></footer></section>`;
+  </style><div id="outline" hidden></div><div id="tip" hidden></div><section id="panel" role="dialog" aria-label="添加批注" hidden><h2>添加批注</h2><p id="target"></p><textarea id="body" maxlength="5000" aria-label="批注内容" placeholder="描述问题、期望效果或改进建议"></textarea><p id="error" role="alert"></p><div id="actions"><button id="cancel" type="button">取消</button><button id="save" type="button" class="primary">确认批注</button></div></section><section id="detail" role="dialog" aria-label="查看批注" hidden><strong>Playbook 批注</strong><p id="detail-body"></p><div id="copy-status" role="status"></div><footer><button id="delete" type="button" class="danger">删除批注</button><button id="close-detail" type="button">关闭</button><button id="copy" type="button" class="primary">复制给智能体</button></footer></section>`;
   const $ = selector => shadow.querySelector(selector);
   const outline = $('#outline'), tip = $('#tip'), panel = $('#panel'), detail = $('#detail');
-  const pins = new Map();
+  const pins = new Map(), removed = new Set();
   let picking = false, selected = null, draft = null, resolvePick = null, frame = 0, currentDetail = null, disposed = false;
   let observedRoute = location.origin + location.pathname;
   const clip = value => String(value || '').replace(/\s+/g, ' ').trim();
@@ -80,7 +81,7 @@
     document.removeEventListener('click', onClick, true);
     outline.hidden = true; tip.hidden = true;
     $('#target').textContent = selectorFor(element);
-    $('#body').value = ''; $('#error').textContent = '';
+    $('#body').value = ''; $('#error').textContent = ''; $('#save').disabled = false;
     panel.hidden = false; $('#body').focus();
   }
   function onKey(event) { if (event.key === 'Escape' && (picking || !panel.hidden)) { event.preventDefault(); event.stopImmediatePropagation(); cancelPick(); } }
@@ -157,8 +158,25 @@
     if (!currentDetail) return;
     $('#copy-status').textContent = (await copy(currentDetail.prompt)) ? '已复制，可粘贴给智能体' : '复制失败，请在运行记录中复制';
   };
+  function remove(id) {
+    removed.add(id);
+    pins.get(id)?.button.remove(); pins.delete(id);
+    if (currentDetail?.annotation.id === id) {
+      detail.hidden = true; currentDetail = null; document.documentElement.classList.remove('playbook-annotation-detail');
+    }
+  }
+  $('#delete').onclick = async () => {
+    if (!currentDetail || $('#delete').disabled) return;
+    const id = currentDetail.annotation.id;
+    $('#delete').disabled = true; $('#copy-status').textContent = '正在删除…';
+    try { await window.__playbookDeleteAnnotation(id); remove(id); }
+    catch (error) { if (currentDetail?.annotation.id === id) $('#copy-status').textContent = error.message || '删除失败，请重试'; }
+    finally { $('#delete').disabled = false; }
+  };
   function commit(annotation, prompt) {
-    stopSelection(); panel.hidden = true; selected ||= document.querySelector(annotation.element.selector);
+    stopSelection(); panel.hidden = true;
+    if (removed.has(annotation.id)) { selected = null; draft = null; return; }
+    selected ||= document.querySelector(annotation.element.selector);
     const button = document.createElement('button'); button.type = 'button'; button.className = 'pin';
     button.setAttribute('aria-label', `查看批注：${annotation.body.slice(0, 40)}`); button.title = '查看 Playbook 批注'; button.textContent = '✎';
     shadow.append(button);
@@ -190,10 +208,11 @@
     if (frame) cancelAnimationFrame(frame); style.remove(); host.remove();
     delete window.playbookAnnotations;
   }
-  window.playbookAnnotations = { start, cancelPick, commit, saveError, raise, dispose,
+  window.playbookAnnotations = { start, cancelPick, commit, remove, saveError, raise, dispose,
     inspect: () => ({ picking, formVisible: !panel.hidden, detailVisible: !detail.hidden, bodyLength: $('#body').value.length,
       formError: $('#error').textContent, saveDisabled: $('#save').disabled, focused: shadow.activeElement?.id || '', copyStatus: $('#copy-status').textContent,
       saveRect: $('#save').getBoundingClientRect().toJSON(),
       copyRect: $('#copy').getBoundingClientRect().toJSON(),
+      deleteRect: $('#delete').getBoundingClientRect().toJSON(),
       pinCount: pins.size, pins: [...pins.values()].map(item => ({ id: item.annotation.id, visible: !item.button.hidden, rect: item.button.getBoundingClientRect().toJSON() })) }) };
 })();

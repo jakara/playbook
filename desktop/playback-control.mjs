@@ -3,21 +3,22 @@ import path from 'node:path';
 
 const playing = run => run && ['waiting', 'preparing', 'playing', 'paused', 'pausing', 'stopping', 'exporting', 'cleaning', 'recovering'].includes(run.state);
 
-export function createPlaybackControl({ appRoot, getRun, getAnnotationMode = () => false, shortcut, onVisibilityChange, isEmbeddedVisible = () => false }) {
+export function createPlaybackControl({ appRoot, getRun, getAnnotationMode = () => false, getNarrationEnabled = () => true, shortcut, onVisibilityChange, isEmbeddedVisible = () => false }) {
   const window = new BrowserWindow({ title: 'Playbook 播放控制', width: 800, height: 104, show: false,
     frame: false, transparent: true, hasShadow: false, resizable: false, movable: true,
     focusable: false, skipTaskbar: true, fullscreenable: false, acceptFirstMouse: true,
     webPreferences: { preload: path.join(appRoot, 'build/control-preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, partition: 'playbook-shell', backgroundThrottling: false } });
   window.setAlwaysOnTop(true, 'floating');
-  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // macOS otherwise hides the entire app from the Dock and application switcher.
+  window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   let point = screen.getCursorScreenPoint(), lastMovement = -Infinity, pulseAt = -Infinity, disposed = false;
   let collapsed = false, positioned = false;
   const state = () => {
     const run = getRun();
-    return { visible: !window.isDestroyed() && window.isVisible(), collapsed, shortcut, annotationMode: getAnnotationMode(),
-      run: run ? Object.fromEntries(['id', 'title', 'state', 'total', 'completed', 'index', 'stepTitle', 'sectionTitle', 'stopRequested', 'interaction'].map(key => [key, run[key]])) : null };
+    return { visible: !window.isDestroyed() && window.isVisible(), collapsed, shortcut, annotationMode: getAnnotationMode(), narrationEnabled: getNarrationEnabled(),
+      run: run ? Object.fromEntries(['id', 'title', 'mode', 'state', 'total', 'completed', 'index', 'stepTitle', 'sectionTitle', 'stopRequested', 'interaction'].map(key => [key, run[key]])) : null };
   };
   const publish = () => { if (!window.isDestroyed()) window.webContents.send('playbook:control-state', state()); };
   function position() {

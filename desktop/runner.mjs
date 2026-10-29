@@ -4,12 +4,12 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { narrationSource } from './narration.mjs';
+import { narrationSource, narrationEnabled } from './narration.mjs';
 import { capturePptxScene, writePptx } from './pptx.mjs';
 import { ManualInteraction } from './interaction.mjs';
 import { CleanupScope, cleanupSummary, settledCleanup, safeError, budgets } from './lifecycle.mjs';
 
-const send = message => process.parentPort ? process.parentPort.postMessage(message) : process.send?.(message);
+const send = message => process.parentPort ? process.parentPort.postMessage(message) : process.connected && process.send?.(message, () => {});
 const receive = callback => process.parentPort ? process.parentPort.on('message', event => callback(event.data)) : process.on('message', callback);
 const change = update => send({ type: 'state', update });
 class Stopped extends Error {}
@@ -54,15 +54,22 @@ async function ui(method, value) {
   }, { method, value });
 }
 async function voiceSource(flow, clip, fallback) {
-  if (clip === false || (!flow.narration?.enabled && !clip)) return null;
+  if (!narrationEnabled(flow, clip, config.narrationEnabled)) return null;
   await checkpoint();
-  const source = await narrationSource({ clip, fallback, options: flow.narration, audioAssets: config.audioAssets,
-    cacheDir: path.join(path.dirname(config.bundle), 'narration'), signal: narrationAbort.signal });
+  if (!narrationEnabled(flow, clip, config.narrationEnabled)) return null;
+  const controller = narrationAbort = new AbortController();
+  let source;
+  try {
+    source = await narrationSource({ clip, fallback, options: flow.narration, audioAssets: config.audioAssets,
+      cacheDir: path.join(path.dirname(config.bundle), 'narration'), signal: controller.signal });
+  } catch (error) {
+    if (error.name !== 'AbortError' || controller.signal.reason !== 'muted') throw error;
+  }
   await checkpoint();
-  return source;
+  return config.narrationEnabled === false ? null : source;
 }
 function startVoice(source) {
-  if (!source) return async () => {};
+  if (!source || config.narrationEnabled === false) return async () => {};
   if (config.stream) { send({ type: 'stream-audio', action: 'play', source }); streamAudioPhase = 'playing'; }
   const task = page.evaluate(value => window.playbookNarration.play(value), source).then(() => null, error => error);
   return async () => { const error = await task; if (config.stream) { send({ type: 'stream-audio', action: 'stop' }); streamAudioPhase = 'stopped'; } if (error) throw error; };
@@ -243,6 +250,10 @@ async function run(input) {
       if (page && !page.isClosed()) await page.close();
       page = await context.newPage(); page.setDefaultTimeout(15000);
       const editPage = page;
+      await page.exposeFunction('__playbookDeleteAnnotation', async annotationId => {
+        if (editPage !== page || editPage.isClosed() || stopped || closing) throw new Error('批注页面已关闭');
+        return request('annotation-delete', { annotationId });
+      });
       await page.exposeFunction('__playbookSaveStepText', async value => {
         if (textEditTask || !running || !paused || stopped || closing || manualGate || editPage !== page || editPage.isClosed()
           || !current.stepId || typeof value?.title !== 'string' || typeof value?.explain !== 'string') throw new Error('当前步骤未处于可编辑的暂停状态');
@@ -377,8 +388,8 @@ async function run(input) {
     running = false; inOperation = false; packaging = false; activeScope = null;
     try { await request('final', { update: finalUpdate }); }
     catch { send({ type: 'receipt-error' }); }
-    if (cancelled || state === 'failed') await browser?.close().catch(() => {});
-    if (closing) process.exit(0);
+    if (cancelled || state === 'failed' || config.stream || config.exportDir) await browser?.close().catch(() => {});
+    if (closing || config.stream || config.exportDir) process.exit(0);
   }
 }
 async function recover(input) {
@@ -408,7 +419,14 @@ async function recover(input) {
   }
 }
 
-async function commandHandler({ command, config: input, busy: inputBusy }) {
+async function commandHandler({ command, config: input, busy: inputBusy, enabled, annotationId }) {
+  if (command === 'narration') {
+    if (typeof enabled !== 'boolean' || !config || config.exportDir) return;
+    config.narrationEnabled = enabled;
+    if (!enabled) { narrationAbort?.abort('muted'); await stopVoice(); }
+    return;
+  }
+  if (command === 'annotation-remove') { await page?.evaluate(id => window.playbookAnnotations?.remove(id), annotationId).catch(() => {}); return; }
   if (command === 'stream-input') {
     if (!config?.stream || !page || page.isClosed() || stopped || closing || (!paused && !manualGate)) return;
     const event = input;
@@ -472,4 +490,12 @@ receive(message => {
     // A navigating/closed document must not kill the worker before Profile cleanup.
     try { change({ warning: safeError(error, config?.parameters) }); } catch {}
   });
+});
+
+if (!process.parentPort) process.once('disconnect', () => {
+  // The host can no longer persist receipts; leave unconfirmed outcomes for restart recovery.
+  stopped = closing = true;
+  executionAbort?.abort(); narrationAbort?.abort();
+  setTimeout(() => process.exit(1), 5000).unref();
+  void Promise.resolve().then(() => browser?.close()).catch(() => {}).finally(() => process.exit(1));
 });

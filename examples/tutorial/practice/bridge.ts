@@ -29,6 +29,10 @@ export const practiceBridge = String.raw`
     async getState() { return clone(state); },
     onState(callback) { listeners.add(callback); return () => listeners.delete(callback); },
     async setPlaybackSelection() {},
+    async setNarrationEnabled(enabled) {
+      if (typeof enabled !== 'boolean') throw new Error('语音讲解开关无效');
+      state.narrationEnabled = enabled; note('narration-practice'); publish(); return clone(state);
+    },
     async refreshWorkspace() { note('refresh-practice'); return clone(state); },
     async removeBook(input) {
       note('remove-practice-book');

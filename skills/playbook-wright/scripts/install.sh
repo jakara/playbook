@@ -38,7 +38,7 @@ TAG="${PLAYBOOK_RELEASE_TAG:-}"
 DSH_TARGET_PROFILE=''
 DSH_TARGET_DIR=''
 DSH_CLI=''
-DSH_PLUGIN_VERSION='0.11.1'
+DSH_PLUGIN_VERSION='0.11.4'
 DSH_PLUGIN_SPEC="playbook-dsh@$DSH_PLUGIN_VERSION"
 
 fail() { printf 'Playbook: %s\n' "$*" >&2; exit 1; }
@@ -149,7 +149,7 @@ verified_download() {
 }
 
 install_dsh_plugin() {
-  local backup_dir filename workspace_file staged
+  local backup_dir filename
   backup_dir="$DSH_DATA_HOME/backups/playbook-dsh/$(/bin/date +%Y%m%d-%H%M%S)-$$"
   (umask 077; /bin/mkdir -p "$backup_dir")
   for filename in package.json pnpm-lock.yaml pnpm-workspace.yaml; do
@@ -161,7 +161,7 @@ install_dsh_plugin() {
   if [ "$DSH_TARGET_PROFILE" = 'desktop' ] && [ "${DSH_SHELL:-}" = '1' ]; then
     printf 'Playbook: Skill 已安装；DSH Desktop 正在运行，请从 npm 注册表安装：%s\n' "$DSH_PLUGIN_SPEC" >&2
     printf 'Playbook: DSH 配置备份：%s\n' "$backup_dir" >&2
-    printf '%s\n' 'Playbook: 请在当前 DSH 中调用 plugin_manager：先 list_bundles，再以以上包名和版本为 target 调用 install_bundle；若返回 pendingBuilds 仅包含 esbuild，可批准该项并重试。核对插件来源为注册表且版本正确后才算完成。' >&2
+    printf '%s\n' 'Playbook: 请在当前 DSH 中调用 plugin_manager：先 list_bundles，再以以上包名和版本为 target 调用 install_bundle。核对插件来源为注册表且版本正确后才算完成。' >&2
     return 4
   fi
 
@@ -183,24 +183,6 @@ install_dsh_plugin() {
     [ -n "$DSH_CLI" ] || fail '找不到 dsh 命令，无法安装到当前 profile。'
   fi
 
-  workspace_file="$DSH_TARGET_DIR/pnpm-workspace.yaml"
-  [ -f "$workspace_file" ] || fail 'DSH profile 缺少 pnpm-workspace.yaml，已保留现状。'
-  if ! /usr/bin/grep -q '^  esbuild: true$' "$workspace_file"; then
-    if /usr/bin/grep -q '^  esbuild:' "$workspace_file"; then
-      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
-      /usr/bin/awk '/^  esbuild:/ { print "  esbuild: true"; next } { print }' "$workspace_file" > "$staged"
-    elif /usr/bin/grep -q '^allowBuilds:$' "$workspace_file"; then
-      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
-      /usr/bin/awk '/^allowBuilds:$/ { print; print "  esbuild: true"; next } { print }' "$workspace_file" > "$staged"
-    else
-      staged="$(/usr/bin/mktemp "$DSH_TARGET_DIR/.playbook-pnpm.XXXXXX")"
-      /bin/cat "$workspace_file" > "$staged"
-      printf '\nallowBuilds:\n  esbuild: true\n' >> "$staged"
-    fi
-    /bin/chmod 600 "$staged"
-    /bin/mv "$staged" "$workspace_file"
-    /usr/bin/grep -q '^  esbuild: true$' "$workspace_file" || fail 'DSH esbuild 放行配置写入失败。'
-  fi
   "$DSH_CLI" plugin --profile "$DSH_TARGET_PROFILE" add "$DSH_PLUGIN_SPEC" || fail "DSH 插件安装失败；配置备份位于 $backup_dir"
   /usr/bin/plutil -extract dsh.profile.bundles json -o - "$DSH_TARGET_DIR/package.json" | /usr/bin/grep -q '"playbook-dsh"' || fail 'DSH profile 未启用 playbook-dsh。'
   [ -f "$DSH_TARGET_DIR/node_modules/playbook-dsh/server.mjs" ] || fail 'DSH 插件包文件缺失。'

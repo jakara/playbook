@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, cp, readFile, writeFile, mkdir, rm, realpath } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,12 +7,12 @@ import { pathToFileURL } from 'node:url';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temp = await realpath(await mkdtemp(path.join(os.tmpdir(), 'playbook-text-edit-dsh-')));
-const project = path.join(temp, 'project'), dataDir = path.join(temp, 'data'), serverDir = path.join(temp, 'server');
+const project = path.join(temp, 'project'), dataDir = path.join(temp, 'data');
 const signal = path.join(temp, 'signal.txt');
 let stop;
 try {
   await cp(path.join(root, 'examples/starter'), project, { recursive: true });
-  await mkdir(dataDir); await mkdir(serverDir);
+  await mkdir(dataDir);
   const manifestFile = path.join(project, '.playbook.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   manifest.profiles[0].parameters.textEditSignal = signal;
@@ -45,18 +44,12 @@ try {
   await writeFile(profileFile, `import { writeFile as writeSignal } from 'node:fs/promises';\n` +
     originalProfile.replace('return { context: { page } };', observer));
   await writeFile(path.join(dataDir, 'settings.json'), JSON.stringify({ schemaVersion: 1, roots: [project] }));
-  const probe = createServer();
-  await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
-  const port = probe.address().port;
-  await new Promise(resolve => probe.close(resolve));
-  const originalServer = await readFile(path.join(root, 'integrations/dsh/server.mjs'), 'utf8');
-  await writeFile(path.join(serverDir, 'server.mjs'), originalServer.replace('const port = 43188', `const port = ${port}`));
-  await cp(path.join(root, 'integrations/dsh/bridge.js'), path.join(serverDir, 'bridge.js'));
   process.env.PLAYBOOK_DSH_ROOT = root;
   process.env.PLAYBOOK_DSH_DATA = dataDir;
   process.env.PLAYBOOK_TEST_PACE = '.5';
-  stop = await (await import(pathToFileURL(path.join(serverDir, 'server.mjs')).href)).startServer();
-  const base = `http://127.0.0.1:${port}`;
+  const handle = await (await import(pathToFileURL(path.join(root, 'integrations/dsh/server.mjs')).href)).startServer();
+  stop = handle.stop;
+  const base = handle.url.slice(0, -1);
   const html = await (await fetch(base)).text();
   const token = JSON.parse(html.match(/window\.__PLAYBOOK_DSH_TOKEN=("[^"]+")/)?.[1] || 'null');
   assert.ok(token);

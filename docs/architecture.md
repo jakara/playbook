@@ -148,7 +148,7 @@ stateDiagram-v2
 
 流程 `redactions` 为 `{ selector, mode?, label?, blurPx?, padding? }[]`，不支持放进 step。selector 使用 CSS 语法，随滚动、重渲染、弹窗和同一主页面导航重新定位；cover 默认不透明覆盖，blur 仅视觉模糊。遮盖层不拦截鼠标，原动作和断言仍操作原控件，不改 DOM 业务值。原值仍在 DOM/API，且 blur 不保证不可辨识，因此这不是安全脱敏。跨 frame、新页面仍需另行适配，讲稿和录音不得重新泄露实际敏感值。
 
-流程 `narration` 包含 enabled、voice、rate 和 opening，步骤 narration 可为 false 或 `{ text?, audio? }`，文字和录音互斥。默认关闭；enabled 为 true 时开场读 title 与 summary，每步读 explain；单步对象可独立启用，false 静音。opening 可以关闭或覆盖开场讲解。语音与页面提示/光标配合播放，当前音频与最短 hold 均完成后才操作，不靠猜音频长度设置等待。
+流程 `narration` 包含 enabled、voice、rate 和 opening，步骤 narration 可为 false 或 `{ text?, audio? }`，文字和录音互斥。客户端 `settings.narrationEnabled` 默认开启，传入运行器后控制所有旁白；未配置旁白时开场读 title 与 summary，每步读 explain，已有录音或专门讲稿优先。流程 enabled 显式为 false 时不生成默认旁白，单步对象仍可独立启用，false 静音。opening 可以关闭或覆盖开场讲解。运行中关闭开关会取消当前生成与播放，重新开启从下一段生效；PPTX 固定使用导出开始时的选择。语音与页面提示/光标配合播放，当前音频与最短 hold 均完成后才操作，不靠猜音频长度设置等待。
 
 macOS 文字朗读使用本机 `say` 生成 WAV，默认 Tingting、185 words/min，rate 范围 80–400；不请求云服务或模型账户。所选声线须在系统可用，生成或播放失败向上传播并停止。系统文字朗读仅支持 macOS，其他平台需使用本地录音。audio 使用工作区相对路径，支持 wav/mp3/m4a/ogg、单文件不超过 20 MB，拒绝网络 URL、绝对或越界引用并随本轮快照冻结。语音控制与运行器暂停/继续/停止同步，停止释放当前播放资源；实际听感与系统输出设备仍需实测。
 

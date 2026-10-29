@@ -50,7 +50,7 @@ const reviewNeeded = run => terminal(run.state) && run.cleanup && !settledCleanu
 const recoveryAvailable = run => run.cleanupScopes?.some(scope => !settledCleanup(scope.status)) && run.cleanupScopes.filter(scope => !settledCleanup(scope.status)).every(scope => scope.recoveryVersion && scope.entries.length && scope.entries.every(entry => settledCleanup(entry.status) || Object.hasOwn(entry, 'handle')));
 
 function viewState() {
-  return { runtimeWarnings, annotationMode, embedded: embeddedBrowser?.state() || { active: false, visible: false }, appVersion: app.getVersion(), workspaces: workspaces.map(workspace => ({ ...workspace, builtin: builtins.includes(workspace.path), profiles: workspace.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
+  return { runtimeWarnings, annotationMode, narrationEnabled: settings.narrationEnabled !== false, embedded: embeddedBrowser?.state() || { active: false, visible: false }, appVersion: app.getVersion(), workspaces: workspaces.map(workspace => ({ ...workspace, builtin: builtins.includes(workspace.path), profiles: workspace.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
     runs: [...runs.filter(reviewNeeded), ...runs.filter(run => !reviewNeeded(run)).slice(0, 100)].map(run => ({ ...run, canRecover: Boolean(recoveryAvailable(run)) })), activeRun: activeRun ? { ...activeRun, canRecover: Boolean(recoveryAvailable(activeRun)) } : null, playbackShortcut: shortcut, playbackControl: playbackControl?.state(), skill: { name: SKILL_NAMES[0], compatibilityName: SKILL_NAMES[1], version: skillVersion, frameworks: FRAMEWORKS.map(({ id, name }) => ({ id, name })) } };
 }
 function publish() { if (window && !window.isDestroyed()) window.webContents.send('playbook:state', viewState()); playbackControl?.publish(); }
@@ -112,6 +112,26 @@ async function recordLate({ scope, update } = {}) {
   const messages = [update?.executionError, update?.error, ...(update?.cleanup?.errors || []).map(error => error.message), ...(scope?.entries || []).map(entry => entry.error)].filter(Boolean).map(error => safeError(error));
   if (messages.length || scope) await record({ lateErrors: [...new Set([...(activeRun.lateErrors || []), ...messages])], ...(scope ? { lateCleanupScopes: [...(activeRun.lateCleanupScopes || []), scope] } : {}) });
 }
+async function deleteAnnotation({ runId, annotationId } = {}) {
+  const run = runs.find(item => item.id === runId);
+  if (!run?.annotations?.some(item => item.id === annotationId)) throw new Error('批注不存在');
+  const annotations = run.annotations.filter(item => item.id !== annotationId);
+  runs = runs.map(item => item.id === runId ? { ...item, annotations } : item);
+  if (activeRun?.id === runId) activeRun.annotations = annotations;
+  const bytes = structuredClone(runs);
+  const saved = persistQueue.then(() => atomicJSON(runsFile, bytes));
+  persistQueue = saved.catch(() => {}); await saved;
+  if (activeRun?.id === runId) worker?.postMessage({ command: 'annotation-remove', annotationId });
+  publish();
+  return { deleted: true };
+}
+async function setNarrationEnabled(enabled) {
+  if (typeof enabled !== 'boolean') throw new Error('语音讲解开关无效');
+  await saveSettings({ ...settings, narrationEnabled: enabled });
+  if (activeRun?.mode === 'play') worker?.postMessage({ command: 'narration', enabled });
+  publish();
+  return viewState();
+}
 function guardRun(milliseconds, message) {
   clearTimeout(runGuard);
   const runId = activeRun?.id, guardedWorker = worker;
@@ -157,6 +177,13 @@ function attachWorker(child, intent, { outputDir, pptxDestination, recovering = 
         }
         if (message.type === 'execution-error') { await record({ executionError: safeError(message.error), executionStatus: 'failed' }); acknowledge(); return; }
         if (message.type === 'annotation-mode') { annotationMode = Boolean(message.active) && activeRun.state === 'paused'; publish(); return; }
+        if (message.type === 'annotation-delete') {
+          try {
+            if (worker !== child || intent.stopped || activeRun.mode !== 'play') throw new Error('批注页面已关闭');
+            acknowledge(null, await deleteAnnotation({ runId, annotationId: message.annotationId }));
+          } catch (error) { acknowledge(error); }
+          return;
+        }
         if (message.type === 'annotation-save') {
           if (worker !== child || activeRun.state !== 'paused' || !intent.paused || !annotationMode || activeRun.mode === 'pptx') throw new Error('仅能在当前演示暂停批注时保存');
           if (message.stepId !== activeRun.stepId || message.flowId !== activeRun.flowId) throw new Error('批注步骤已变化，请重新选择元素');
@@ -342,7 +369,7 @@ async function play({ workspaceId, entryId, kind = 'script', profileId, browser:
         captureDir: process.env.PLAYBOOK_TEST_CAPTURE === '1' ? path.join(dataDir, 'evidence', runId) : null,
         exportDir: pptxDestination ? path.join(outputDir, 'export') : null,
         pace: process.env.PLAYBOOK_TEST_PACE ? Math.max(.02, Number(process.env.PLAYBOOK_TEST_PACE)) : 1,
-        headless: process.env.PLAYBOOK_TEST_HEADLESS === '1', paused: intent.paused } });
+        headless: process.env.PLAYBOOK_TEST_HEADLESS === '1', paused: intent.paused, narrationEnabled: settings.narrationEnabled !== false } });
       intent.ready = true;
       return { runId };
     } catch (error) {
@@ -476,6 +503,7 @@ app.whenReady().then(async () => {
   try {
     const saved = JSON.parse(await readFile(settingsFile, 'utf8'));
     if (saved.schemaVersion !== 1 || !Array.isArray(saved.roots)
+      || saved.narrationEnabled !== undefined && typeof saved.narrationEnabled !== 'boolean'
       || saved.hiddenBuiltins !== undefined && (!Array.isArray(saved.hiddenBuiltins) || saved.hiddenBuiltins.some(id => typeof id !== 'string'))
       || saved.hiddenBuiltinBooks !== undefined && (!saved.hiddenBuiltinBooks || Array.isArray(saved.hiddenBuiltinBooks) || typeof saved.hiddenBuiltinBooks !== 'object'
         || Object.values(saved.hiddenBuiltinBooks).some(ids => !Array.isArray(ids) || ids.some(id => typeof id !== 'string')))) throw new Error('Invalid settings');
@@ -493,7 +521,7 @@ app.whenReady().then(async () => {
   window.on('closed', () => { window = null; });
   window.webContents.on('render-process-gone', () => { void shutdown(); });
   embeddedBrowser = createEmbeddedBrowser({ window, appRoot, dataDir, sessionDir: browserSessionDir, onChange: publish, onCrash: () => { void control('stop'); } });
-  playbackControl = createPlaybackControl({ appRoot, getRun: () => activeRun, getAnnotationMode: () => annotationMode, shortcut, onVisibilityChange: publish, isEmbeddedVisible: () => embeddedBrowser?.state().visible });
+  playbackControl = createPlaybackControl({ appRoot, getRun: () => activeRun, getAnnotationMode: () => annotationMode, getNarrationEnabled: () => settings.narrationEnabled !== false, shortcut, onVisibilityChange: publish, isEmbeddedVisible: () => embeddedBrowser?.state().visible });
   shortcut.registered = globalShortcut.register(shortcut.accelerator, () => {
     playbackControl.pulse();
     void control('toggle').catch(error => { shortcut.error = safeError(error); publish(); window?.show(); });
@@ -504,6 +532,8 @@ app.whenReady().then(async () => {
   handle('playbackState', () => playbackControl.state(), true);
   handle('collapseControl', value => playbackControl.setCollapsed(value), true);
   handle('annotate', toggleAnnotation, true);
+  handle('setNarrationEnabled', setNarrationEnabled, true);
+  handle('deleteAnnotation', deleteAnnotation);
   handle('copyAnnotation', ({ runId, annotationId }) => {
     const run = runs.find(item => item.id === runId);
     const annotation = run?.annotations?.find(item => item.id === annotationId);

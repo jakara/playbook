@@ -15,7 +15,7 @@ function mainContext(extra = {}) {
   const context = vm.createContext({
     messages, activeRun: { id: 'run', state: 'playing' }, worker: { postMessage: message => messages.push(message) },
     controlIntent: { runId: 'run', paused: false, stopped: false, ready: true },
-    annotationMode: false, publish: () => {},
+    annotationMode: false, publish: () => {}, settings: {},
     terminal: state => ['completed', 'failed', 'stopped'].includes(state),
     quitting: false, tutorialActions: new Set(), guardRun: () => {}, setTimeout: () => {}, disposeWorker: async () => {}, playbackSelection: null, window: null,
     ...extra,

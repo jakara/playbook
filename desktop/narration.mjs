@@ -9,6 +9,10 @@ const speechFailure = voice => new Error(`本机语音“${voice}”无法生成
 const aborted = () => new DOMException('旁白生成已取消', 'AbortError');
 let voices;
 
+export function narrationEnabled(flow, clip, enabled = true) {
+  return enabled && clip !== false && (Boolean(clip) || flow.narration?.enabled !== false);
+}
+
 function checkSignal(signal) {
   if (signal?.aborted) throw aborted();
 }

@@ -1,6 +1,6 @@
 {
   "name": "playbook-dsh",
-  "version": "0.11.1",
+  "version": "0.11.4",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -9,7 +9,7 @@
   },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar"] }
+    "client": { "platform": "web", "inject": ["@deepseek-ai/dsh-client-ui-layout", "@deepseek-ai/dsh-client-ui-sidebar", "@deepseek-ai/dsh-client-ui-workspace"] }
   },
   "files": ["index.js", "server.mjs", "bridge.js", "client.js", "cordis.patch.yml", "runtime/**", "README.md", "LICENSE"],
   "license": "MIT",
@@ -20,7 +20,7 @@
   "dependencies": {
     "@playwright/test": "1.58.2",
     "driver.js": "1.10.2",
-    "esbuild": "0.28.2",
+    "esbuild": "npm:esbuild-wasm@0.28.2",
     "jszip": "3.10.1",
     "playwright": "1.58.2",
     "pptxgenjs": "4.0.1",

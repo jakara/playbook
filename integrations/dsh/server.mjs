@@ -19,7 +19,7 @@ const { createAnnotation, formatAnnotation } = annotations
 const { FRAMEWORKS, SKILL_NAMES, targetFor, inspectSkillBundle, installSkillBundle } = skillInstaller
 const { commitPptx } = pptx
 const dataDir = process.env.PLAYBOOK_DSH_DATA || path.join(process.env.DSH_HOME || path.join(homedir(), '.dsh'), 'playbook')
-const port = 43188
+let port
 const settingsFile = path.join(dataDir, 'settings.json')
 const runsFile = path.join(dataDir, 'runs.json')
 const tutorial = path.join(root, 'examples/tutorial')
@@ -37,7 +37,7 @@ const codeHash = bytes => createHash('sha256').update(bytes).digest('hex')
 const processAlive = pid => { try { process.kill(pid, 0); return true } catch (error) { return error.code !== 'ESRCH' } }
 
 function viewState() {
-  return { runtimeWarnings: [], annotationMode, embedded: { active: streamActive, visible: streamVisible }, appVersion: version,
+  return { runtimeWarnings: [], annotationMode, narrationEnabled: settings.narrationEnabled !== false, embedded: { active: streamActive, visible: streamVisible }, appVersion: version,
     workspaces: workspaces.map(item => ({ ...item, builtin: item.path === tutorial, profiles: item.profiles.map(({ id, title, dataMode }) => ({ id, title, dataMode })) })),
     runs: [...runs.filter(reviewNeeded), ...runs.filter(run => !reviewNeeded(run)).slice(0, 100)].map(run => ({ ...run, canRecover: Boolean(recoveryAvailable(run)) })),
     activeRun: activeRun ? { ...activeRun, canRecover: Boolean(recoveryAvailable(activeRun)) } : null,
@@ -104,6 +104,19 @@ function guardRun(ms, reason) {
     void record(interrupted(activeRun, reason)).then(() => currentWorker?.kill()).catch(() => {})
   }, ms)
 }
+async function deleteAnnotation({ runId, annotationId } = {}) {
+  const run = runs.find(item => item.id === runId)
+  if (!run?.annotations?.some(item => item.id === annotationId)) throw new Error('批注不存在')
+  const annotations = run.annotations.filter(item => item.id !== annotationId)
+  runs = runs.map(item => item.id === runId ? { ...item, annotations } : item)
+  if (activeRun?.id === runId) activeRun.annotations = annotations
+  const bytes = structuredClone(runs)
+  const saved = persistQueue.then(() => atomicJSON(runsFile, bytes))
+  persistQueue = saved.catch(() => {}); await saved
+  if (activeRun?.id === runId) worker?.send({ command: 'annotation-remove', annotationId })
+  publish()
+  return { deleted: true }
+}
 async function disposeWorker() {
   if (!worker) return
   if (activeRun && !terminal(activeRun.state)) throw new Error('资源释放仍未结束，不能替换运行器')
@@ -124,6 +137,13 @@ function attachWorker(child, { outputDir, pptxDestination, recovering = false } 
         if (message.type === 'stream-audio') { publishAudio(message); return }
         if (message.type === 'stream-ready') { streamActive = true; streamVisible = true; publish(); return }
         if (message.type === 'annotation-mode') { annotationMode = Boolean(message.active) && activeRun.state === 'paused'; publish(); return }
+        if (message.type === 'annotation-delete') {
+          try {
+            if (worker !== child || intent?.stopped || activeRun.mode !== 'play') throw new Error('批注页面已关闭')
+            ack(null, await deleteAnnotation({ runId, annotationId: message.annotationId }))
+          } catch (error) { ack(error) }
+          return
+        }
         if (message.type === 'annotation-save') {
           if (activeRun.state !== 'paused' || !intent?.paused || !annotationMode || message.stepId !== activeRun.stepId || message.flowId !== activeRun.flowId) throw new Error('批注步骤已变化')
           const annotation = createAnnotation(message.annotation, activeRun)
@@ -224,13 +244,13 @@ async function play(input, exportRequested = false) {
       if ((await readWorkspace(workspace.path)).token !== workspace.token) throw new Error('脚本正在更新，请刷新后再播放')
       activeRun.snapshotHash = built.snapshotHash; activeRun.bundleHash = codeHash(await readFile(built.bundle))
       const runId = activeRun.id
-      const child = fork(path.join(root, 'desktop/runner.mjs'), [], { cwd: outputDir, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+      const child = fork(path.join(root, 'desktop/runner.mjs'), [], { cwd: outputDir, execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
       worker = child; attachWorker(child, { outputDir, pptxDestination })
       await record({ executing: true, workerPid: child.pid })
       child.send({ command: 'start', config: { ...built, appRoot: root, runId, title: selected.title, stream: !exportRequested,
         segments: selected.items.map(item => ({ flowId: item.id, scriptTitle: item.title, sectionTitle: item.sectionTitle, bookTitle: item.bookTitle })),
         profileId: selected.profile.id, dataMode: selected.profile.dataMode, parameters: selected.profile.parameters, workspaceDir: workspace.path,
-        captureDir: null, exportDir: exportRequested ? path.join(outputDir, 'export') : null, pace: Number(process.env.PLAYBOOK_TEST_PACE) || 1, headless: true, paused: intent.paused } })
+        captureDir: null, exportDir: exportRequested ? path.join(outputDir, 'export') : null, pace: Number(process.env.PLAYBOOK_TEST_PACE) || 1, headless: true, paused: intent.paused, narrationEnabled: settings.narrationEnabled !== false } })
       intent.ready = true
       return { runId }
     } catch (error) { await record({ state: 'failed', error: safeError(error) }); throw error }
@@ -261,7 +281,7 @@ async function recoverRun({ runId } = {}) {
     await disposeWorker()
     activeRun = structuredClone(run)
     intent = { runId, stopped: false, paused: false, ready: true }
-    const child = fork(path.join(root, 'desktop/runner.mjs'), [], { cwd: outputDir, stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
+    const child = fork(path.join(root, 'desktop/runner.mjs'), [], { cwd: outputDir, execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc'] })
     worker = child; attachWorker(child, { outputDir, recovering: true })
     await record({ state: 'recovering', recoveryStartedAt: new Date().toISOString(), workerPid: child.pid, recoveryError: null })
     child.send({ command: 'recover', config: { bundle, appRoot: root, runId, profileId: run.profileId, workspaceDir: workspace.path, parameters: selected.profile.parameters, scopes: run.cleanupScopes } })
@@ -295,6 +315,19 @@ async function control(command) {
 }
 async function command(method, input) {
   if (method === 'getState') return viewState()
+  if (method === 'controlRun') {
+    if (!input || !['pause', 'resume', 'stop'].includes(input.command)) throw new Error('运行控制命令无效')
+    // Bind external controls to the observed run before the synchronous control admission.
+    if (!activeRun || activeRun.id !== input.runId) throw new Error('当前运行已变化，请重新读取状态')
+    return control(input.command)
+  }
+  if (method === 'setNarrationEnabled') {
+    if (typeof input !== 'boolean') throw new Error('语音讲解开关无效')
+    await saveSettings({ ...settings, narrationEnabled: input })
+    if (activeRun?.mode === 'play') worker?.send({ command: 'narration', enabled: input })
+    publish(); return viewState()
+  }
+  if (method === 'deleteAnnotation') return deleteAnnotation(input)
   if (method === 'refreshWorkspace') { await refresh(true); return viewState() }
   if (method === 'addWorkspace') {
     const directory = await realpath(input?.path || '')
@@ -382,7 +415,7 @@ async function request(req, res) {
   if (req.method === 'GET' && url.pathname === '/') {
     const html = await readFile(path.join(root, 'build/ui/index.html'), 'utf8')
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' })
-    const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'" />`
+    const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'" />`
     res.end(html.replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/, policy).replace('</head>', `<script>window.__PLAYBOOK_DSH_TOKEN=${JSON.stringify(authToken)};</script><script src="/bridge.js"></script></head>`))
     return
   }
@@ -430,15 +463,17 @@ export async function startServer() {
   await mkdir(dataDir, { recursive: true })
   try { const loaded = JSON.parse(await readFile(settingsFile, 'utf8')); if (loaded.schemaVersion === 1 && Array.isArray(loaded.roots)) settings = loaded } catch {}
   try { const loaded = JSON.parse(await readFile(runsFile, 'utf8')); if (Array.isArray(loaded)) runs = loaded } catch {}
-  runs = runs.map(run => terminal(run.state) ? run : interrupted(run, 'DSH 上次退出时演示未结束，资源结果需核对'))
+  runs = runs.map(run => terminal(run.state) ? run : { ...run, ...interrupted(run, 'DSH 上次退出时演示未结束，资源结果需核对') })
   await atomicJSON(runsFile, runs)
   await refresh()
   server = http.createServer((req, res) => { void request(req, res).catch(error => json(res, 400, { error: safeError(error) })) })
-  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) })
-  console.log(`[playbook-dsh] http://127.0.0.1:${port}`)
+  await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
+  port = server.address().port
+  const url = `http://127.0.0.1:${port}/`
+  console.log(`[playbook-dsh] ${url}`)
   const refresher = setInterval(() => void refresh().catch(error => console.error('[playbook-dsh refresh]', safeError(error))), 1500)
   refresher.unref()
-  return async () => {
+  return { url, call: command, stop: async () => {
     clearInterval(refresher)
     if (activeRun && !terminal(activeRun.state)) await control('stop')
     const started = Date.now()
@@ -447,5 +482,5 @@ export async function startServer() {
     await disposeWorker().catch(() => {})
     for (const res of subscribers) res.end()
     await new Promise(resolve => server.close(resolve))
-  }
+  } }
 }

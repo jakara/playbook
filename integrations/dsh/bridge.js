@@ -27,10 +27,29 @@
     if (!response.ok) throw new Error(data.error || `${method} 失败`)
     return data.result
   }
+  function chooseDirectory() {
+    if (window.parent === window) return Promise.reject(new Error('请在 DSH 的 Playbook 面板中选择项目文件夹'))
+    return new Promise((resolve, reject) => {
+      const channel = new MessageChannel()
+      const finish = (error, directory) => {
+        clearTimeout(timer); channel.port1.close()
+        if (error) reject(new Error(error)); else resolve(directory)
+      }
+      const timer = setTimeout(() => finish('无法连接文件夹选择器，请重新打开 Playbook 面板'), 5000)
+      channel.port1.onmessage = ({ data }) => {
+        if (data?.ready === true) { clearTimeout(timer); return }
+        if (data?.error) finish(data.error)
+        else if (data?.path === null || typeof data?.path === 'string') finish(null, data.path)
+        else finish('文件夹选择结果无效')
+      }
+      // The request carries no path or token; the host verifies this iframe before replying on the private port.
+      window.parent.postMessage({ type: 'playbook:choose-directory' }, '*', [channel.port2])
+    })
+  }
   const api = {
     getState: () => lastState ? Promise.resolve(lastState) : invoke('getState'),
     onState(callback) { listeners.add(callback); if (lastState) callback(lastState); return () => listeners.delete(callback) },
-    async addWorkspace() { const directory = window.prompt('请输入包含 .playbook.json 的项目文件夹绝对路径'); return directory ? invoke('addWorkspace', { path: directory }) : api.getState() },
+    async addWorkspace() { const directory = await chooseDirectory(); return directory ? invoke('addWorkspace', { path: directory }) : api.getState() },
     removeWorkspace: input => invoke('removeWorkspace', input),
     removeBook: input => invoke('removeBook', input),
     refreshWorkspace: input => invoke('refreshWorkspace', input),
@@ -38,6 +57,8 @@
     control: input => invoke('control', input),
     showEmbedded: input => invoke('showEmbedded', input),
     annotate: () => invoke('annotate'),
+    setNarrationEnabled: input => invoke('setNarrationEnabled', input),
+    deleteAnnotation: input => invoke('deleteAnnotation', input),
     setPlaybackSelection: input => invoke('setPlaybackSelection', input),
     async copyAnnotation(input) { const { text } = await invoke('copyAnnotation', input); await navigator.clipboard.writeText(text); return { copied: true } },
     async copyContext(input) { const { text } = await invoke('copyContext', input); await navigator.clipboard.writeText(text); return { copied: true } },
@@ -49,7 +70,7 @@
       if (!input.reveal) { const link = document.createElement('a'); link.href = result.download; link.download = ''; document.body.append(link); link.click(); link.remove() }
       return result
     },
-    async chooseSkillProject() { const directory = window.prompt('请输入智能体使用的项目文件夹绝对路径'); return directory ? invoke('chooseSkillProject', { path: directory }) : null },
+    async chooseSkillProject() { const directory = await chooseDirectory(); return directory ? invoke('chooseSkillProject', { path: directory }) : null },
     skillPreview: input => invoke('skillPreview', input),
     skillInstall: input => invoke('skillInstall', input),
   }

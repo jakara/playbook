@@ -37,7 +37,12 @@ try {
   for (let i = 0; i < 100 && !main; i++) { for (const candidate of app.windows()) if (await candidate.evaluate(() => Boolean(window.playbook)).catch(() => false)) { main = candidate; break; } if (!main) await sleep(100); }
   assert.ok(main);
   const state = () => main.evaluate(() => window.playbook.getState());
-  const until = async predicate => { const deadline = Date.now() + 20000; while (Date.now() < deadline) { const value = await state(); if (predicate(value)) return value; await sleep(60); } throw new Error('等待批注状态超时'); };
+  const until = async predicate => {
+    const deadline = Date.now() + 20000; let value;
+    while (Date.now() < deadline) { value = await state(); if (predicate(value)) return value; await sleep(60); }
+    result.failureState = value?.activeRun;
+    throw new Error(`等待批注状态超时：${JSON.stringify({ state: value?.activeRun?.state, annotationMode: value?.annotationMode, annotations: value?.activeRun?.annotations?.length })}`);
+  };
   const workspace = (await state()).workspaces.find(item => item.path === project); assert.ok(workspace);
   await main.evaluate(input => window.playbook.play(input), { workspaceId: workspace.id, entryId: 'annotation-flow', kind: 'script', profileId: 'local', browser: 'embedded' });
   await until(value => value.activeRun?.stepId === 'inspect' && value.activeRun.state === 'playing');
@@ -78,6 +83,22 @@ try {
   await main.evaluate(value => window.playbook.copyAnnotation(value), { runId: saved.activeRun.id, annotationId: annotation.id });
   const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
   assert.match(copied, /playbook.annotation.v1/); assert.match(copied, /发布前应显示课程名称/); assert.match(copied, /#publish/);
+  const detail = await business.evaluate(() => window.playbookAnnotations.inspect());
+  await business.mouse.click(detail.deleteRect.x + detail.deleteRect.width / 2, detail.deleteRect.y + detail.deleteRect.height / 2);
+  await until(value => value.activeRun?.annotations?.length === 0);
+  await business.waitForFunction(() => window.playbookAnnotations.inspect().pinCount === 0 && !window.playbookAnnotations.inspect().detailVisible);
+  await assert.rejects(main.evaluate(value => window.playbook.copyAnnotation(value), { runId: saved.activeRun.id, annotationId: annotation.id }), /批注不存在/);
+  await business.screenshot({ path: path.join(evidence, '05-deleted-pin.png') });
+  await main.evaluate(() => window.playbook.annotate());
+  await business.waitForFunction(() => window.playbookAnnotations.inspect().picking);
+  await business.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
+  const secondForm = await business.evaluate(() => window.playbookAnnotations.inspect());
+  assert.equal(secondForm.formVisible, true);
+  assert.equal(secondForm.saveDisabled, false, '再次添加批注必须重新启用保存按钮');
+  await business.keyboard.type('这条批注从运行记录删除。');
+  const secondSave = (await business.evaluate(() => window.playbookAnnotations.inspect())).saveRect;
+  await business.mouse.click(secondSave.x + secondSave.width / 2, secondSave.y + secondSave.height / 2);
+  await until(value => value.activeRun?.annotations?.length === 1);
   await main.evaluate(() => window.playbook.control('resume'));
   await until(value => value.activeRun?.state === 'playing' && !value.annotationMode);
   await assert.rejects(main.evaluate(() => window.playbook.annotate()), /请先暂停/);
@@ -86,6 +107,14 @@ try {
   assert.equal(stopped.activeRun.state, 'stopped'); assert.equal(stopped.activeRun.cleanup.status, 'succeeded');
   assert.equal(stopped.activeRun.annotations?.length, 1);
   assert.equal((await readFile(path.join(project, 'events.jsonl'), 'utf8')).trim(), 'release');
+  await main.evaluate(() => window.playbook.showEmbedded(false));
+  await main.getByRole('button', { name: '运行记录', exact: true }).click();
+  await main.getByRole('button', { name: '删除批注：这条批注从运行记录删除。' }).click();
+  await until(value => value.runs.find(run => run.id === saved.activeRun.id)?.annotations?.length === 0);
+  await main.screenshot({ path: path.join(evidence, '06-history-deleted.png') });
+  await app.close(); app = null;
+  const persisted = JSON.parse(await readFile(path.join(data, 'runs.json'), 'utf8'));
+  assert.equal(persisted.find(run => run.id === saved.activeRun.id).annotations.length, 0);
   result.passed = true; result.runId = saved.activeRun.id; result.annotation = annotation; result.copiedPrompt = copied;
 } catch (error) { result.passed = false; result.error = error.stack; process.exitCode = 1; }
 finally { await app?.close().catch(() => {}); await writeFile(path.join(output, 'result.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(evidence, 'result.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify({ passed: result.passed, output, evidence, error: result.error })); }

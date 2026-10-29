@@ -104,7 +104,7 @@ PLAYBOOK_RELEASE_TAG="$PLAYBOOK_RELEASE_TAG" \
     --install --framework dsh --scope user
 ```
 
-若在普通终端为已经退出的 DSH Desktop 安装，可再传 `--dsh-profile desktop`；安装器会备份 profile 配置，从 npm 注册表安装与 Skill 同版的 `playbook-dsh`，并仅放行插件依赖 `esbuild` 的构建脚本。运行中的 DSH Desktop 不能由外部 `dsh plugin` 命令修改 profile：此时安装器会提示在 DSH 插件界面或通过内置 `plugin_manager` 按包名安装。此分支退出码为 4，不能将 Skill 成功误报为插件已安装。已有本地压缩包来源的旧插件应先在 DSH 界面卸载，再按包名安装；项目设置与运行记录不会随依赖卸载而删除。
+若在普通终端为已经退出的 DSH Desktop 安装，可再传 `--dsh-profile desktop`；安装器会备份 profile 配置，从 npm 注册表安装与 Skill 同版的 `playbook-dsh`；插件依赖无需执行安装脚本。运行中的 DSH Desktop 不能由外部 `dsh plugin` 命令修改 profile：此时安装器会提示在 DSH 插件界面或通过内置 `plugin_manager` 按包名安装。此分支退出码为 4，不能将 Skill 成功误报为插件已安装。已有本地压缩包来源的旧插件应先在 DSH 界面卸载，再按包名安装；项目设置与运行记录不会随依赖卸载而删除。
 
 **安装到指定项目：** 将示例路径替换为用户明确指定的、智能体实际打开的项目绝对路径，不推断为演示子目录或上级仓库。
 
@@ -147,7 +147,7 @@ Claude Code 项目安装将 `--framework codex` 换成 `--framework claude-code`
    | Claude Code | `~/.claude/skills/{playbook-wright,playbook-playwright}` | `<项目>/.claude/skills/{playbook-wright,playbook-playwright}` |
 
 3. 提醒用户重新加载智能体 Skills 或开启新会话，再调用 `$playbook-wright` 创作、维护演示或转换 Playwright TC；旧 `$playbook-playwright` 是兼容入口。文件校验成功与智能体已加载分开说明，未实际调用时不得声称调用已验证。
-   在 DSH 环境中，另核对当前 profile 的 `dsh.profile.bundles` 包含 `playbook-dsh`、依赖来源为 npm 注册表、安装版本与 Skill 一致，并在界面中看到 Playbook 入口。若安装器返回退出码 4，当前 DSH 智能体应先用 `plugin_manager` 列出 bundle，再以安装器输出的 `playbook-dsh@版本` 为 target 执行 `install_bundle`；仅在工具明确列出 `esbuild` 为待批准构建脚本且用户已授权时批准该项，并核对实际应用结果。
+   在 DSH 环境中，另核对当前 profile 的 `dsh.profile.bundles` 包含 `playbook-dsh`、依赖来源为 npm 注册表、安装版本与 Skill 一致，并在界面中看到 Playbook 入口。若安装器返回退出码 4，当前 DSH 智能体应先用 `plugin_manager` 列出 bundle，再以安装器输出的 `playbook-dsh@版本` 为 target 执行 `install_bundle`，并核对实际应用结果。
 4. 打开应用首页的 **Playbook 使用教程**。先体验内置播放；Skill 实操环节只有用户选择并点击的安装才产生真实写入。
 5. 简短报告固定的 Release tag、应用路径/版本、Skill 版本、安装范围、两个 Skill 位置、实际检查结果、备份位置，以及仍需用户完成的系统交互或重载。不输出凭据。
 

@@ -1,0 +1,5 @@
+.narration-toggle { display:inline-flex; align-items:center; gap:8px; flex-shrink:0; padding:8px 10px; border:1px solid #cbd9cd; border-radius:7px; color:#46694f; background:#f9fcf7; font:inherit; font-size:12px; cursor:pointer; -webkit-app-region:no-drag; }
+.narration-toggle-state { padding:1px 7px; border-radius:10px; background:#e0e5df; color:#526052; font-size:11px; }
+.narration-toggle[aria-checked="true"] .narration-toggle-state { background:#2e7957; color:white; }
+.narration-toggle:disabled { opacity:.55; cursor:default; }
+.narration-toggle:focus-visible { outline:3px solid #83bda7; outline-offset:2px; }
